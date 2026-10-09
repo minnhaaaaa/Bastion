@@ -82,7 +82,7 @@ Owns: `runtime-adapter`, `runtime-pi`, `security`, `orchestrator`, `scenario-kit
 
 - [x] **Pi spike first (M0):** confirm real `@mariozechner/pi-coding-agent` API; prove file/http/exec tools can be replaced or wrapped so every call hits `ToolGateway.dispatch`. Report back early if not.
 - [x] `security`: `PolicyEngine` evaluating the **workflow's** `policyRules` + agent capabilities (glob match, rule IDs, `default.deny`); `ToolGateway` (normalize → `tool.requested` → evaluate → `tool.decided` → re-check inputs `isUsable` right before execution → `tool.executed`; any error = deny + `policy.unavailable`). Unit tests with generated rules.
-- [ ] `sandbox/`: Docker worker, deny-by-default egress; hosts/paths come from config; target services record a **real access audit log** (acceptance #1).
+- [x] `sandbox/`: Docker worker, deny-by-default egress; hosts/paths come from config; target services record a **real access audit log** (acceptance #1).
 - [x] `orchestrator`: `Scheduler` builds `TaskSpec`s from the run's workflow definition; ready when deps' artifacts are usable; bounded parallelism; `hold`; `rerun` with fresh executionIds/attempt+1; emits `run.planned`, `task.state_changed`, `agent.session_*`.
 - [x] `runtime-adapter`: interface + test-only fake (lives in test files).
 - [x] `scenario-kit`: workflow runner — loads sources from their `location`, applies attack payloads by `attackPayloadId`, baseline/protected modes, verifier checks. Contains no workflow data.

@@ -54,9 +54,9 @@ Rules (unchanged): **zero hardcoded data** (TEAM_PLAN.md → Rule #1), `packages
 ## Member 2: runtime, security, sandbox
 
 ### B1. Sandbox for real *(do first)*
-- [ ] Build the sandbox image and run it with `docker compose -f sandbox/compose.yml`.
-- [ ] **Prove egress is denied:** from inside the worker, show that a request to any origin outside `SANDBOX_HTTP_ORIGINS` fails at the network level, not only in the worker's code.
-- [ ] Put the target service(s) on the internal network, and show that the access audit file is written outside the agent-writable mount.
+- [x] Build the sandbox image and run it with `docker compose -f sandbox/compose.yml`.
+- [x] **Prove egress is denied:** from inside the worker, show that a request to any origin outside `SANDBOX_HTTP_ORIGINS` fails at the network level, not only in the worker's code.
+- [x] Put the target service(s) on the internal network, and show that the access audit file is written outside the agent-writable mount.
 - **Done when:** the last open item in TEAM_PLAN.md (`sandbox/`) is ticked, with evidence in `sandbox/README.md`.
 
 ### B2. First real model run
