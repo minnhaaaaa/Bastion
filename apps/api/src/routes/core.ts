@@ -12,6 +12,7 @@ import {
   toGraphView,
 } from "@bastion/contracts";
 import { computeImpact } from "@bastion/recovery";
+import { computeMetrics } from "../metrics";
 import { actorId, requireActor, requireOperator, type Authenticator } from "../auth";
 import type { Access, AppDeps, RunService } from "../context";
 import { HttpError, notFound } from "../errors";
@@ -117,6 +118,49 @@ export function coreRoutes(
     const { id } = IdParam.parse(req.params);
     const s = await x.access.readRun(await any(req), id);
     return { ...toGraphView(s), lastSeq: s.lastSeq, graphProjectedUpTo: s.graphProjectedUpTo };
+  });
+
+  // ── Evaluation ───────────────────────────────────────────────────────────
+  app.get("/api/runs/:id/metrics", async (req) => {
+    const { id } = IdParam.parse(req.params);
+    const s = await x.access.readRun(await any(req), id);
+    return computeMetrics(s, await d.journal.read(id), d.audit);
+  });
+
+  app.get("/api/compare", async (req) => {
+    const actor = await op(req);
+    const q = z.object({ protected: z.string().min(1), baseline: z.string().min(1) }).parse(req.query);
+    const [p, b] = await Promise.all([x.access.readRun(actor, q.protected), x.access.readRun(actor, q.baseline)]);
+    if (p.run.mode !== "PROTECTED" || b.run.mode !== "BASELINE") throw new HttpError("VALIDATION", "expected one PROTECTED and one BASELINE run");
+    const [pm, bm] = await Promise.all([
+      computeMetrics(p, await d.journal.read(p.run.id), d.audit),
+      computeMetrics(b, await d.journal.read(b.run.id), d.audit),
+    ]);
+    const key = (h: string[]) => [...h].sort().join(",");
+    return {
+      protected: pm,
+      baseline: bm,
+      sameWorkflowVersion: pm.workflowId === bm.workflowId && pm.workflowVersion === bm.workflowVersion,
+      sameAttackContent: pm.attackContentHashes.length > 0 && key(pm.attackContentHashes) === key(bm.attackContentHashes),
+    };
+  });
+
+  /** Full trace + metrics, labelled with the pinned workflow and model config. */
+  app.get("/api/runs/:id/export", async (req, reply) => {
+    const actor = await op(req);
+    const { id } = IdParam.parse(req.params);
+    const s = await x.access.operatorRun(actor, id);
+    const events = await d.journal.read(id);
+    const workflow = await d.workflows.getVersion(s.run.workflowId, s.run.workflowVersion);
+    reply.header("content-disposition", `attachment; filename="${id}.json"`);
+    return {
+      exportedAt: new Date().toISOString(),
+      run: s.run,
+      workflow,
+      runtime: d.runtimeInfo ?? null,
+      metrics: await computeMetrics(s, events, d.audit),
+      events,
+    };
   });
 
   app.get("/api/runs/:id/incidents", async (req) => {

@@ -9,25 +9,26 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@fastify/cors": "^10.0.0",
     "@bastion/contracts": "workspace:*",
     "@bastion/db": "workspace:*",
-    "fastify": "^5.2.0",
-    "socket.io": "^4.8.0",
-    "zod": "^3.24.0",
+    "@bastion/knowledge-graph": "workspace:*",
+    "@bastion/orchestrator": "workspace:*",
     "@bastion/provenance": "workspace:*",
     "@bastion/recovery": "workspace:*",
-    "@bastion/knowledge-graph": "workspace:*",
-    "drizzle-orm": "^0.38.0",
-    "@bastion/orchestrator": "workspace:*",
-    "@bastion/scenario-kit": "workspace:*",
-    "@bastion/runtime-pi": "workspace:*",
     "@bastion/runtime-adapter": "workspace:*",
+    "@bastion/runtime-pi": "workspace:*",
+    "@bastion/scenario-kit": "workspace:*",
     "@bastion/security": "workspace:*",
-    "@sinclair/typebox": "^0.34.52"
+    "@fastify/cors": "^10.0.0",
+    "@fastify/rate-limit": "^10.3.0",
+    "@sinclair/typebox": "^0.34.52",
+    "drizzle-orm": "^0.38.0",
+    "fastify": "^5.2.0",
+    "socket.io": "^4.8.0",
+    "zod": "^3.24.0"
   },
   "devDependencies": {
-    "tsx": "^4.19.0",
-    "socket.io-client": "^4.8.0"
+    "socket.io-client": "^4.8.0",
+    "tsx": "^4.19.0"
   }
 }

@@ -34,6 +34,9 @@ Every mutation body carries `commandId` (`newId("command")`). Replaying the same
 | `GET /api/runs/:id/graph` | — | `GraphView` + `lastSeq`, `graphProjectedUpTo` |
 | `GET /api/runs/:id/incidents` | — | `SecurityIncident[]` |
 | `GET /api/runs/:id/impact?fromId=` | — | `{ authoritative, graph }` impact sets |
+| `GET /api/runs/:id/metrics` | — | `RunMetrics` (from events + target audit) |
+| `GET /api/compare?protected=&baseline=` | operator | `RunComparison` |
+| `GET /api/runs/:id/export` | operator | `{ run, workflow, runtime, metrics, events }` (JSON download) |
 | `POST /api/runs/:id/incidents` | `OpenIncidentCmd` | `SecurityIncident` |
 | `POST /api/incidents/:id/quarantine` | `QuarantineCmd` | `{ ok, suggestedReplacementSourceVersionId }` |
 | `POST /api/incidents/:id/recovery-plan` | `RecoveryPlanCmd` | `RecoveryPlan` (+ `approval.requested` event) |
@@ -44,6 +47,7 @@ Every mutation body carries `commandId` (`newId("command")`). Replaying the same
 | `GET /api/arena/rooms/:id/me` | player | `PlayerPrivateState` |
 | `GET /api/arena/rooms/:id/attack-options` | attacker | `{ id, card, label, targetSourceName }[]` |
 | `POST /api/arena/rooms/:id/start` | host, `StartRoundCmd` | `ArenaPhaseUpdate` |
+| `POST /api/arena/rooms/:id/{pause,resume,reset}` | host, `Pause/Resume/ResetRoundCmd` | `ArenaPhaseUpdate` (`paused`, `round`) |
 | `POST /api/arena/rooms/:id/actions` | player, `ArenaActionCmd` | `ActionResult` |
 | `POST /api/arena/rooms/:id/reveal` | host, `RevealCmd` | `ArenaReveal` |
 
@@ -59,6 +63,16 @@ Connect with `io(API_URL, { auth: { token } })`. Unauthenticated sockets are rej
 ## Arena round
 
 `LOBBY` → host start (2–6 players; roles assigned privately) → `BRIEFING` (timed) → `ATTACK_WINDOW` (timed; attacker queues payloads) → `AGENT_EXECUTION` (a real run starts with the queued attacks) → `INVESTIGATION` (first incident) → `CONTAINMENT` (quarantine) → `RECOVERY` (approved rerun) → host reveal → `REVEAL`.
+
+Host **pause** freezes the round clock and rejects player actions; the agents keep running. **Reset** returns to `LOBBY` with the same players and a new `round`. Earlier runs stay in history. If a defender holding `QUARANTINE`/`APPROVE_RECOVERY` stays offline past `ARENA_RECONNECT_GRACE_SECONDS`, the card moves to a connected defender. Expired rooms are swept: their tokens stop working and their sockets are closed. Joins and actions are rate-limited (`429 RATE_LIMITED`).
+
+## Restarts
+
+On boot, work that was in flight is closed out truthfully: running executions become `FAILED`, runs become `FAILED`, and in-progress recoveries become `RECOVERY_FAILED`, all with the reason `controller restarted`. Runs with unresolved incidents are re-adopted by the scheduler, so they can still be quarantined and recovered, and a failed recovery can be re-planned.
+
+## Workflow CLI
+
+`pnpm workflow:validate <file>`, `pnpm workflow:project <name>`, `pnpm workflow:submit <file> --project <id>` or `--version-of <wf_id>`. Uses `API_URL` and `OPERATOR_TOKEN` from `.env`.
 
 Score `unsafeActionsExecuted` is `null` until the sandbox target audit is wired. It is never assumed to be 0.
 

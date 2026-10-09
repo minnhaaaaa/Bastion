@@ -20,6 +20,7 @@ import { RecoveryManager } from "@bastion/recovery";
 import { buildServer } from "../server";
 import { newSecret } from "../auth";
 import { buildAgentRuntime } from "./index";
+import { reconcileOnBoot } from "../reconcile";
 
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => {
@@ -115,19 +116,16 @@ async function setup() {
   const runs = new RunRepository(db);
   const workflows = new PgWorkflowRepository(db);
   const broker = new PgArtifactBroker(journal, runs, new FsBlobStore(join(dir, "blobs")));
-  const runtime = buildAgentRuntime({
-    env: {
+  const runtimeEnv = {
       PI_PROVIDER: newId("trace"), PI_MODEL: newId("trace"), PI_BASE_URL: "http://127.0.0.1:9", PI_API_KEY: newId("trace"), PI_AGENT_DIR: dir, PI_TIMEOUT_MS: "5000",
       SCHEDULER_PARALLELISM: "2",
       SANDBOX_URL: `http://127.0.0.1:${port}`, SANDBOX_TOKEN: token, SANDBOX_WORKSPACE_PATH: workspace, SANDBOX_ROOT: workspace, SANDBOX_TIMEOUT_MS: "3000",
       SANDBOX_TOOL_OPERATIONS: JSON.stringify(toolOps), SANDBOX_HTTP_ORIGINS: JSON.stringify([targetOrigin]), SANDBOX_MAX_BYTES: "65536",
       SANDBOX_AUDIT_DIRECTORY: auditDir, SANDBOX_AUDIT_MOUNT: auditDir, SANDBOX_AUDIT_PATH: auditFile,
-    },
-    journal,
-    broker,
-    workflows,
-    createAgent: (ctx, gateway) => scriptedAgent(ctx, gateway, httpTool),
-  });
+  };
+  const blobDir = join(dir, "blobs");
+  const createAgent: NonNullable<Parameters<typeof buildAgentRuntime>[0]["createAgent"]> = (ctx, gateway) => scriptedAgent(ctx, gateway, httpTool);
+  const runtime = buildAgentRuntime({ env: runtimeEnv, journal, broker, workflows, createAgent });
   const recovery = new RecoveryManager({ journal, locate: runs, workflows, scheduler: runtime.scheduler, verifier: runtime.verifier, fence: runtime.fence, approvalTtlMs: 60_000 });
   recovery.start();
   cleanups.push(async () => (recovery.stop(), recovery.idle()));
@@ -137,8 +135,8 @@ async function setup() {
   const { app } = await buildServer(
     {
       db, journal, broker, recovery, runs, workflows, projects: new ProjectRepository(db), commands: new CommandStore(db),
-      launcher: runtime.launcher, audit: runtime.audit, operators: new Map([[opToken, userId]]),
-      config: { roomTtlMs: 60_000, briefingMs: 60_000, attackWindowMs: 60_000 },
+      launcher: runtime.launcher, audit: runtime.audit, runtimeInfo: runtime.info, operators: new Map([[opToken, userId]]),
+      config: { roomTtlMs: 60_000, briefingMs: 60_000, attackWindowMs: 60_000, reconnectGraceMs: 60_000, sweepIntervalMs: 3_600_000, joinRatePerMinute: 1000, actionRatePerMinute: 1000 },
     },
     { webOrigin: "http://test.invalid", logLevel: "silent" },
   );
@@ -187,7 +185,7 @@ async function setup() {
     await runtime.launcher.launch({ runId, workflow: wf, attackPayloadIds: [definition.attackPayloads[0]!.id], traceId });
     return runId;
   };
-  return { app, auth, journal, recovery, runtime, launch, hits, auditFile, ids: { tR, tB, tV, tU } };
+  return { app, auth, db, journal, recovery, runtime, launch, hits, auditFile, runtimeEnv, createAgent, blobDir, ids: { tR, tB, tV, tU } };
 }
 
 describe("agent runtime wired to journal/broker/recovery/API", () => {
@@ -241,5 +239,87 @@ describe("agent runtime wired to journal/broker/recovery/API", () => {
     expect(await t.runtime.audit.unsafeAccessCount(runId)).toBe(t.hits.length);
     expect(s.run.status).toBe("FAILED");
     expect(s.verification?.find((c) => c.name === "target_audit.no_unsafe_access")?.passed).toBe(false);
+  }, 30_000);
+
+  it("restart mid-incident: fresh process adopts the contained run and still recovers it", async () => {
+    const t = await setup();
+    const runId = await t.launch("PROTECTED");
+    const incident = Object.values((await t.journal.snapshot(runId))!.incidents)[0]!;
+
+    // "Restart": brand-new journal/broker/runtime/recovery instances over the same database.
+    const journal = new PgEventJournal(t.db);
+    const runs = new RunRepository(t.db);
+    const workflows = new PgWorkflowRepository(t.db);
+    const broker = new PgArtifactBroker(journal, runs, new FsBlobStore(t.blobDir));
+    const runtime = buildAgentRuntime({ env: t.runtimeEnv, journal, broker, workflows, createAgent: t.createAgent });
+    const recovery = new RecoveryManager({ journal, locate: runs, workflows, scheduler: runtime.scheduler, verifier: runtime.verifier, fence: runtime.fence, approvalTtlMs: 60_000 });
+    recovery.start();
+    cleanups.push(async () => (recovery.stop(), recovery.idle()));
+
+    const report = await reconcileOnBoot({ db: t.db, journal, scheduler: runtime.scheduler });
+    expect(report.adopted).toContain(runId);
+    expect(report.failedRuns).not.toContain(runId); // it had finished; nothing was in flight
+
+    const user = newId("user");
+    await recovery.quarantine(incident.id, incident.sourceVersionId, user);
+    const replacement = await recovery.suggestReplacement(incident.id);
+    const plan = await recovery.plan(incident.id, replacement!);
+    const approval = Object.values((await journal.snapshot(runId))!.approvals).find((a) => a.planId === plan.id)!;
+    await recovery.approveAndRecover({ approvalId: approval.id, planId: plan.id, actionDigest: plan.planDigest, actorId: user });
+    await recovery.idle();
+    const s = (await journal.snapshot(runId))!;
+    expect(s.run.status).toBe("RECOVERED");
+    expect(latestExecution(s, t.ids.tR)!.attempt).toBe(2);
+    expect(latestExecution(s, t.ids.tU)!.attempt).toBe(1);
+  }, 30_000);
+
+  it("compare + metrics + export: identical inputs, measured outcomes, no credentials leaked", async () => {
+    const t = await setup();
+    const p = await t.launch("PROTECTED");
+    const b = await t.launch("BASELINE");
+
+    // Contain the protected run so coverage is measurable.
+    const inc = Object.values((await t.journal.snapshot(p))!.incidents)[0]!;
+    await t.app.inject({ method: "POST", url: `/api/incidents/${inc.id}/quarantine`, headers: t.auth, payload: { commandId: newId("command"), sourceVersionId: inc.sourceVersionId } });
+
+    const cmp = await t.app.inject({ method: "GET", url: `/api/compare?protected=${p}&baseline=${b}`, headers: t.auth });
+    expect(cmp.statusCode).toBe(200);
+    const c = cmp.json();
+    expect(c.sameWorkflowVersion).toBe(true);
+    expect(c.sameAttackContent).toBe(true);
+    expect(c.protected.unsafeActionsExecuted).toBe(0);
+    expect(c.baseline.unsafeActionsExecuted).toBe(t.hits.length);
+    expect(c.baseline.unsafeActionsExecuted).toBeGreaterThan(0);
+    expect(c.protected.toolCalls.denied).toBeGreaterThan(0);
+    expect(c.baseline.toolCalls.denied).toBe(0);
+    expect(c.protected.quarantineCoverage[0]).toMatchObject({ sourceVersionId: inc.sourceVersionId, coverage: 1 });
+    expect(c.protected.deniedWithoutUntrustedInput).toBe(0);
+    expect((await t.app.inject({ method: "GET", url: `/api/compare?protected=${b}&baseline=${p}`, headers: t.auth })).statusCode).toBe(400);
+
+    const exp = await t.app.inject({ method: "GET", url: `/api/runs/${p}/export`, headers: t.auth });
+    const body = exp.json();
+    expect(body.events).toHaveLength(body.metrics.events);
+    expect(body.workflow.version).toBe(1);
+    expect(body.runtime).toMatchObject({ provider: t.runtimeEnv.PI_PROVIDER, model: t.runtimeEnv.PI_MODEL });
+    expect(exp.body).not.toContain(t.runtimeEnv.PI_API_KEY);
+    expect(exp.body).not.toContain(t.runtimeEnv.SANDBOX_TOKEN);
+  }, 30_000);
+
+  it("acceptance #2: agents cannot use another agent's capabilities, even by claiming its identity", async () => {
+    const t = await setup();
+    const runId = await t.launch("PROTECTED");
+    const s = (await t.journal.snapshot(runId))!;
+    const researchExec = latestExecution(s, t.ids.tR)!;
+    // The research agent has no net.http grant: its own attempts were denied by default.deny.
+    const researchCalls = Object.values(s.toolRequests).filter((r) => r.executionId === researchExec.id);
+    expect(researchCalls.length).toBeGreaterThan(0);
+    expect(researchCalls.every((r) => r.decision === "DENY" && r.policyRuleId === "default.deny")).toBe(true);
+
+    // Claiming the builder's agent id from the research execution is refused (identity is server-derived).
+    const builderAgent = s.tasks[t.ids.tB]!.agentId;
+    const readTool = Object.entries(JSON.parse(t.runtimeEnv.SANDBOX_TOOL_OPERATIONS) as Record<string, string>).find(([, op]) => op === "fs.read")![0];
+    const result = await t.runtime.gateway.dispatch({ runId, taskId: t.ids.tR, agentId: builderAgent, executionId: researchExec.id, traceId: newId("trace"), tool: readTool, args: { path: "x" } });
+    expect(result.status).toBe("DENIED");
+    expect(await readFile(t.auditFile, "utf8")).toBe("");
   }, 30_000);
 });

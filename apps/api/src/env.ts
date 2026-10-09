@@ -36,6 +36,10 @@ const Env = z.object({
   ROOM_TTL_SECONDS: seconds,
   ARENA_BRIEFING_SECONDS: seconds,
   ARENA_ATTACK_WINDOW_SECONDS: seconds,
+  ARENA_RECONNECT_GRACE_SECONDS: seconds,
+  ARENA_SWEEP_SECONDS: seconds,
+  ARENA_JOIN_RATE_PER_MINUTE: seconds,
+  ARENA_ACTION_RATE_PER_MINUTE: seconds,
   /**
    * Explicit choice: "enabled" requires all PI_* / SANDBOX_* / SCHEDULER_* settings and starts the
    * agent runtime; "disabled" serves data only (runs/rooms return 503). No implicit fallback.

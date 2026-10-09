@@ -12,6 +12,7 @@ const STATUS: Record<Code, number> = {
   CONFLICT: 409,
   EXPIRED: 410,
   WRONG_PHASE: 409,
+  RATE_LIMITED: 429,
   INTERNAL: 500,
 };
 
@@ -36,6 +37,9 @@ export function errorHandler(err: FastifyError | Error, req: FastifyRequest, rep
       code = "INTERNAL";
       status = 503;
     } else code = err.code as Code;
+    message = err.message;
+  } else if ((err as FastifyError).statusCode === 429) {
+    code = "RATE_LIMITED";
     message = err.message;
   } else if ((err as FastifyError).validation || (err as FastifyError).statusCode === 400) {
     code = "VALIDATION";

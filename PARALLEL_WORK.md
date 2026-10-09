@@ -23,31 +23,31 @@ Rules (unchanged): **zero hardcoded data** (TEAM_PLAN.md → Rule #1), `packages
 - **Done when:** Member 1's app talks to a live API backed by real Postgres and Neo4j.
 
 ### A2. Workflow submission tooling *(a tool, not data)*
-- [ ] Add `pnpm workflow:submit <file.json>`: it reads a definition from a path you pass in and POSTs it to `/api/workflows`, using `API_URL` and `OPERATOR_TOKEN` from the environment. No definitions are committed to the repo.
-- [ ] Add `pnpm workflow:validate <file.json>`, which validates locally with `WorkflowDefinition` and prints readable errors.
+- [x] Add `pnpm workflow:submit <file.json>`: it reads a definition from a path you pass in and POSTs it to `/api/workflows`, using `API_URL` and `OPERATOR_TOKEN` from the environment. No definitions are committed to the repo.
+- [x] Add `pnpm workflow:validate <file.json>`, which validates locally with `WorkflowDefinition` and prints readable errors.
 - **Done when:** anyone can register a workflow from a local file in one command.
 
 ### A3. Restart resilience
-- [ ] On boot, find runs whose status is `RUNNING`/`RECOVERING` but which have no live scheduler state. Mark them `FAILED` with the reason `controller restarted` (record it truthfully; never pretend they resumed).
-- [ ] Rebuild active-recovery tracking from events (`recovery.started` with no `recovery.completed`), or close those recoveries as `RECOVERY_FAILED` with the same reason.
-- [ ] Check that `ArenaService.resumeAll()` re-arms timers after a restart, and add a test for it.
+- [x] On boot, find runs whose status is `RUNNING`/`RECOVERING` but which have no live scheduler state. Mark them `FAILED` with the reason `controller restarted` (record it truthfully; never pretend they resumed).
+- [x] Rebuild active-recovery tracking from events (`recovery.started` with no `recovery.completed`), or close those recoveries as `RECOVERY_FAILED` with the same reason.
+- [x] Check that `ArenaService.resumeAll()` re-arms timers after a restart, and add a test for it.
 - **Done when:** killing the API mid-run and restarting it leaves every run in a state that is honest and visible to the UI.
 
 ### A4. Arena hardening
-- [ ] Host **pause/resume/reset**: new `POST /api/arena/rooms/:id/{pause,resume,reset}`, host-only, with additive commands in contracts.
-- [ ] **Approver reassignment:** if the defender holding `APPROVE_RECOVERY` disconnects, give the card to another connected defender. If there is none, the host can approve through the operator console.
-- [ ] **Room expiry sweep:** expire rooms past `expiresAt` and disconnect their sockets.
-- [ ] **Rate limits** on `/join` and `/actions` (`@fastify/rate-limit`, limits from env).
-- [ ] Tests for each.
+- [x] Host **pause/resume/reset**: new `POST /api/arena/rooms/:id/{pause,resume,reset}`, host-only, with additive commands in contracts.
+- [x] **Approver reassignment:** if the defender holding `APPROVE_RECOVERY` disconnects, give the card to another connected defender. If there is none, the host can approve through the operator console.
+- [x] **Room expiry sweep:** expire rooms past `expiresAt` and disconnect their sockets.
+- [x] **Rate limits** on `/join` and `/actions` (`@fastify/rate-limit`, limits from env).
+- [x] Tests for each.
 
 ### A5. Evaluation and comparison (feeds the UI's side-by-side view)
-- [ ] `GET /api/runs/:id/metrics`: denied calls, unsafe accesses (target audit), legitimate completion, rerun count, quarantine coverage (impact vs invalidated), false blocks, durations. All derived from events and the audit.
-- [ ] `GET /api/compare?protected=<runId>&baseline=<runId>`: both metric sets plus a check that the two runs used the same pinned workflow version.
-- [ ] `GET /api/runs/:id/export`: the full event trace plus metrics as JSON, labelled with the workflow version and model config.
+- [x] `GET /api/runs/:id/metrics`: denied calls, unsafe accesses (target audit), legitimate completion, rerun count, quarantine coverage (impact vs invalidated), false blocks, durations. All derived from events and the audit.
+- [x] `GET /api/compare?protected=<runId>&baseline=<runId>`: both metric sets plus a check that the two runs used the same pinned workflow version.
+- [x] `GET /api/runs/:id/export`: the full event trace plus metrics as JSON, labelled with the workflow version and model config.
 - **Done when:** Member 1 can render the comparison view from one endpoint.
 
 ### A6. Acceptance tests (ARCHITECTURE §14)
-- [ ] Map each of tests #1–#9 to an automated test, adding any that are missing. #2 (agent isolation) and #8 (a client forging approval over sockets) need explicit tests.
+- [x] Map each of tests #1–#9 to an automated test, adding any that are missing. #2 (agent isolation) and #8 (a client forging approval over sockets) need explicit tests.
 
 ---
 

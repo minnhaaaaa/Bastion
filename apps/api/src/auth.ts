@@ -28,9 +28,13 @@ export class Authenticator {
     }
     const h = hashToken(token);
     const [room] = await this.db.select().from(schema.arenaRooms).where(eq(schema.arenaRooms.hostTokenHash, h));
-    if (room) return { kind: "host", userId: room.hostId, roomId: room.id };
+    // Tokens die with their room.
+    if (room) return room.status === "EXPIRED" ? null : { kind: "host", userId: room.hostId, roomId: room.id };
     const [player] = await this.db.select().from(schema.arenaPlayers).where(eq(schema.arenaPlayers.tokenHash, h));
-    if (player) return { kind: "player", playerId: player.id, roomId: player.roomId };
+    if (player) {
+      const [r] = await this.db.select({ status: schema.arenaRooms.status }).from(schema.arenaRooms).where(eq(schema.arenaRooms.id, player.roomId));
+      return r?.status === "EXPIRED" ? null : { kind: "player", playerId: player.id, roomId: player.roomId };
+    }
     return null;
   }
 

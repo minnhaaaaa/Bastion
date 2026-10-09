@@ -248,6 +248,11 @@ export const arenaRooms = pgTable(
     phaseEndsAt: ts("phase_ends_at"),
     /** Attack payload ids queued during ATTACK_WINDOW, installed by the RunLauncher before scheduling. */
     pendingAttackPayloadIds: jsonb("pending_attack_payload_ids").$type<string[]>().notNull().default([]),
+    /** Incremented by host reset; actions and reveals are scoped to the current round. */
+    round: integer("round").notNull().default(1),
+    /** Host pause freezes the round clock and player actions (agents keep running). */
+    paused: boolean("paused").notNull().default(false),
+    pausedRemainingMs: integer("paused_remaining_ms"),
     hostId: text("host_id").notNull(),
     expiresAt: ts("expires_at").notNull(),
   },
@@ -279,6 +284,7 @@ export const arenaActions = pgTable(
     type: text("type").notNull(),
     outcome: actionOutcome("outcome").notNull(),
     message: text("message").notNull().default(""),
+    round: integer("round").notNull().default(1),
     createdAt: ts("created_at").notNull().defaultNow(),
   },
   (t) => [uniqueIndex("arena_actions_command_uq").on(t.commandId)],

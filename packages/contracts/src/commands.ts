@@ -103,6 +103,15 @@ export type StartRoundCmd = z.infer<typeof StartRoundCmd>;
 export const RevealCmd = cmd({});
 export type RevealCmd = z.infer<typeof RevealCmd>;
 
+// POST /api/arena/rooms/:id/{pause,resume,reset} (host only)
+export const PauseRoundCmd = cmd({});
+export type PauseRoundCmd = z.infer<typeof PauseRoundCmd>;
+export const ResumeRoundCmd = cmd({});
+export type ResumeRoundCmd = z.infer<typeof ResumeRoundCmd>;
+/** Back to LOBBY with the same players; starts a new round number. Past runs stay in history. */
+export const ResetRoundCmd = cmd({});
+export type ResetRoundCmd = z.infer<typeof ResetRoundCmd>;
+
 // POST /api/arena/rooms/:id/actions
 // Typed game actions. No free-form text, URLs or shell commands are accepted.
 export const ArenaActionCmd = z.discriminatedUnion("card", [
@@ -139,6 +148,7 @@ export const ApiError = z.object({
       "CONFLICT",
       "EXPIRED",
       "WRONG_PHASE",
+      "RATE_LIMITED",
       "INTERNAL",
     ]),
     message: z.string(),

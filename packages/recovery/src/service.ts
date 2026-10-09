@@ -246,7 +246,8 @@ export class RecoveryManager implements RecoveryService {
 
   async plan(incidentId: string, replacementSourceVersionId: string): Promise<RecoveryPlan> {
     const { runId, s, incident } = await this.incidentCtx(incidentId);
-    if (incident.state !== "QUARANTINED" && incident.state !== "RECOVERY_PLANNED")
+    // RECOVERY_FAILED may be re-planned: a human can retry with a fresh, separately approved plan.
+    if (!["QUARANTINED", "RECOVERY_PLANNED", "RECOVERY_FAILED"].includes(incident.state))
       throw new RecoveryError("CONFLICT", `incident is ${incident.state}; quarantine before planning`);
     const repl = s.sources[replacementSourceVersionId];
     if (!repl) throw new RecoveryError("NOT_FOUND", "replacement source not in run");

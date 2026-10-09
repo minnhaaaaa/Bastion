@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { FastifyInstance } from "fastify";
-import { ArenaActionCmd, CreateRoomCmd, JoinRoomCmd, RevealCmd, StartRoundCmd } from "@bastion/contracts";
+import { ArenaActionCmd, CreateRoomCmd, JoinRoomCmd, PauseRoundCmd, ResetRoundCmd, ResumeRoundCmd, RevealCmd, StartRoundCmd } from "@bastion/contracts";
 import { requireActor, requireOperator, type Actor, type Authenticator } from "../auth";
 import type { Access, AppDeps } from "../context";
 import type { ArenaService } from "../arena/service";
@@ -23,7 +23,7 @@ function requirePlayer(a: Actor | null, roomId: string) {
 
 export function arenaRoutes(
   app: FastifyInstance,
-  _d: AppDeps,
+  d: AppDeps,
   x: { auth: Authenticator; access: Access; idem: Idempotency; arena: ArenaService },
 ) {
   app.post("/api/arena/rooms", async (req, reply) => {
@@ -44,7 +44,7 @@ export function arenaRoutes(
   });
 
   // Join is unauthenticated (QR code). commandId is not stored: replays are rejected by alias uniqueness.
-  app.post("/api/arena/rooms/:id/join", async (req, reply) => {
+  app.post("/api/arena/rooms/:id/join", { config: { rateLimit: { max: d.config.joinRatePerMinute, timeWindow: 60_000 } } }, async (req, reply) => {
     const { id } = IdParam.parse(req.params);
     const cmd = JoinRoomCmd.parse(req.body);
     return reply.status(201).send(await x.arena.join(id, cmd.joinCode, cmd.displayAlias));
@@ -82,9 +82,30 @@ export function arenaRoutes(
     }));
   });
 
-  app.post("/api/arena/rooms/:id/actions", async (req) => {
+  // Host controls: pause/resume freeze the round clock and player actions; reset starts a new round.
+  for (const [name, schema, fn] of [
+    ["pause", PauseRoundCmd, (id: string) => x.arena.pause(id)],
+    ["resume", ResumeRoundCmd, (id: string) => x.arena.resume(id)],
+    ["reset", ResetRoundCmd, (id: string) => x.arena.reset(id)],
+  ] as const) {
+    app.post(`/api/arena/rooms/:id/${name}`, async (req, reply) => {
+      const { id } = IdParam.parse(req.params);
+      const host = requireHost(await x.auth.fromRequest(req), id);
+      const cmd = schema.parse(req.body);
+      return x.idem.run(reply, { commandId: cmd.commandId, actorId: host.userId, route: `arena.${name}:${id}` }, async () => ({
+        status: 200,
+        body: x.arena.phaseUpdate(await fn(id)),
+      }));
+    });
+  }
+
+  app.post(
+    "/api/arena/rooms/:id/actions",
+    { config: { rateLimit: { max: d.config.actionRatePerMinute, timeWindow: 60_000, keyGenerator: (req) => req.headers.authorization ?? req.ip } } },
+    async (req) => {
     const { id } = IdParam.parse(req.params);
     const p = requirePlayer(await x.auth.fromRequest(req), id);
     return x.arena.act(p.playerId, ArenaActionCmd.parse(req.body));
-  });
+  },
+  );
 }
