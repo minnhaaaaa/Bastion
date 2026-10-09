@@ -135,8 +135,8 @@ export function Console({ runId }: { runId?: string }) {
         <div className="console-main">
           <div className="workspace-heading">
             <div>
-              <span className="eyebrow">DEVELOPER CONSOLE</span>
-              <h1>Eyes on every handoff.</h1>
+              <span className="eyebrow">BASTION / CONSOLE</span>
+              <h1>Workspace.</h1>
             </div>
             <span className="status-badge">
               <span
@@ -199,12 +199,12 @@ export function Console({ runId }: { runId?: string }) {
                   onClick={() => void launch()}
                   disabled={!workflowId || busy}
                 >
-                  Run protected <Arrow />
+                  Run <Arrow />
                 </Button>
                 <label
                   className={`button upload-button ${!projectId ? "disabled" : ""}`}
                 >
-                  Import workflow
+                  Import JSON
                   <input
                     type="file"
                     accept=".json,application/json"

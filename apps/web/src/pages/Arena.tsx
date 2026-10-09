@@ -203,7 +203,7 @@ export function Arena({ roomId }: { roomId?: string }) {
       <main id="main" tabIndex={-1} className="arena-page container">
         <div className="arena-heading">
           <div>
-            <span className="eyebrow">BASTION / ADVERSARIAL PLAYGROUND</span>
+            <span className="eyebrow">BASTION / ARENA</span>
             <h1>
               The <em>Arena.</em>
             </h1>
@@ -224,17 +224,12 @@ export function Arena({ roomId }: { roomId?: string }) {
             <div className="arena-entry">
               <div className="arena-entry-copy">
                 <h2>
-                  One workflow.
+                  Attack.
                   <br />
-                  Two sides.
+                  Defend.
                   <br />
-                  <em>Every move matters.</em>
+                  <em>Recover.</em>
                 </h2>
-                <p>
-                  Join a sandboxed agent workflow. Plant a poisoned input, or
-                  follow the evidence and contain it. The mission: keep the
-                  legitimate work moving.
-                </p>
                 <form
                   className="join-form"
                   onSubmit={(e) => {
@@ -244,7 +239,7 @@ export function Arena({ roomId }: { roomId?: string }) {
                     if (id) barba.go(`/arena/${encodeURIComponent(id)}`);
                   }}
                 >
-                  <label htmlFor="room-id">Have a room invitation?</label>
+                  <label htmlFor="room-id">Room ID</label>
                   <div className="inline-form">
                     <input
                       id="room-id"
@@ -259,15 +254,15 @@ export function Arena({ roomId }: { roomId?: string }) {
                 </form>
               </div>
               <div className="slice-panel">
-                <span className="eyebrow">WARM-UP / SLICE BLADE</span>
+                <span className="eyebrow">WARM-UP</span>
                 {reduced ? (
                   <div className="slice-still">ARENA</div>
                 ) : (
                   <SliceBlade
                     title="BASTION"
-                    ink="#ffffff"
-                    accent="#9281f7"
-                    background="#000000"
+                    ink="#f3e7cf"
+                    accent="#f23005"
+                    background="#0c0a07"
                     style={{
                       minWidth: 0,
                       minHeight: 0,
@@ -276,10 +271,6 @@ export function Arena({ roomId }: { roomId?: string }) {
                     }}
                   />
                 )}
-                <p className="mono">
-                  Drag to slice. A separate visual warm-up, not the security
-                  round.
-                </p>
               </div>
             </div>
             <section className="host-setup">
@@ -288,11 +279,7 @@ export function Arena({ roomId }: { roomId?: string }) {
                 <Connect />
               ) : (
                 <form onSubmit={(e) => void createRoom(e)}>
-                  <h2>Bring your workflow.</h2>
-                  <p>
-                    Create a room from a workflow already registered in your
-                    workspace.
-                  </p>
+                  <h2>Host a round.</h2>
                   <label htmlFor="host-workflow">Workflow ID</label>
                   <div className="inline-form">
                     <input
@@ -334,7 +321,7 @@ export function Arena({ roomId }: { roomId?: string }) {
                 </strong>
               </div>
               <div>
-                <span className="eyebrow">YOUR ROLE</span>
+                <span className="eyebrow">ROLE</span>
                 <strong>
                   {session?.kind === "host"
                     ? "Host"
@@ -344,11 +331,7 @@ export function Arena({ roomId }: { roomId?: string }) {
             </div>
             {!session && (
               <form className="room-join" onSubmit={join}>
-                <h2>Take your place.</h2>
-                <p>
-                  Use the room code from your host. Your role is assigned
-                  privately when the round starts.
-                </p>
+                <h2>Join.</h2>
                 <div className="workspace-controls">
                   <label>
                     Display alias
@@ -378,11 +361,7 @@ export function Arena({ roomId }: { roomId?: string }) {
               <div className="host-panel">
                 <div>
                   <span className="eyebrow">INVITE YOUR PLAYERS</span>
-                  <h2>Scan. Join. Take a side.</h2>
-                  <p>
-                    Share the invitation with your players. Keep this host
-                    session private.
-                  </p>
+                  <h2>Invite players.</h2>
                   <a
                     className="text-link"
                     href={joinUrl}
@@ -460,10 +439,6 @@ export function Arena({ roomId }: { roomId?: string }) {
                     <span className="eyebrow">PRIVATE ACTIONS</span>
                     <h2>Your move.</h2>
                   </div>
-                  <p>
-                    Actions are authorized by the server against your role and
-                    the current round phase.
-                  </p>
                 </div>
                 {result && (
                   <div className="action-result" role="status">

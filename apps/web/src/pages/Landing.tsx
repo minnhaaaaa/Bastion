@@ -1,266 +1,183 @@
-import { useState } from "react";
-import VectorWordmark from "../components/originkit/ui/vector-wordmark";
-import MouseEffects from "../components/originkit/ui/clickeffects";
-import {
-  Arrow,
-  Footer,
-  Header,
-  Mark,
-  useReducedMotion,
-} from "../components/ui";
+import { motion, useReducedMotion } from "framer-motion";
+import { Koi } from "../components/wenvy/Koi";
+import { Reveal } from "../components/wenvy/Reveal";
+import { Envelope } from "../components/wenvy/Envelope";
+import { Terminal } from "../components/wenvy/Terminal";
+import { Header, Footer } from "../components/ui";
+const ease = [0.16, 1, 0.3, 1] as const;
 export function Landing() {
   const reduced = useReducedMotion();
-  const [step, setStep] = useState<"trace" | "contain" | "recover">("trace");
   return (
     <>
       <Header />
-      <main id="main" tabIndex={-1}>
-        <section className="hero container">
-          <div className="hero-copy">
-            <a className="announcement" href="/arena">
-              <span className="tiny-mark">◇</span> The agent security arena is
-              open <Arrow />
-            </a>
-            <h1>
-              Stop the breach.
-              <br />
-              <em>
-                Save the
-                <br className="desktop-break" /> workflow.
-              </em>
+      <main id="main" tabIndex={-1} className="wenvy-site">
+        <section className="hero" aria-labelledby="wordmark">
+          <Koi className="koi koi--br" />
+          <motion.div
+            className="hero__inner"
+            initial={reduced ? false : { opacity: 0, y: 22 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: reduced ? 0 : 0.8, ease }}
+          >
+            <h1 className="wordmark" id="wordmark" aria-label="Bastion">
+              <span className="wordmark__line" data-text="BAS">
+                BAS
+              </span>
+              <span className="wordmark__line" data-text="TION">
+                TION
+              </span>
             </h1>
-            <p>
-              Your agents work together.
-              <br />
-              Their security should, too.
-            </p>
-            <div className="hero-actions">
-              <a href="/dashboard" className="button">
-                Open developer console <Arrow />
-              </a>
-              <a href="/arena" className="text-link">
-                Enter the arena <Arrow diagonal />
-              </a>
-            </div>
-            <span className="hero-note mono">TRACE. CONTAIN. RECOVER.</span>
-          </div>
-          <div className="hero-object" aria-label="Sculptural Bastion fortress">
-            <div className="object-frame">
-              <span className="corner c1" />
-              <span className="corner c2" />
-              <span className="corner c3" />
-              <span className="corner c4" />
-              <div className="monolith">
-                <div className="monolith-top" />
-                <div className="monolith-front">
-                  <i />
-                  <i />
-                  <i />
-                  <i />
-                </div>
-                <div className="monolith-side">
-                  <i />
-                  <i />
-                  <i />
-                </div>
-              </div>
-              <div className="orbital orbital-one" />
-              <div className="orbital orbital-two" />
-              <span className="object-axis axis-left">Y</span>
-              <span className="object-axis axis-bottom">X</span>
-            </div>
-            <div className="object-caption mono">
-              <span>BASTION / CONTROL BOUNDARY</span>
-              <span>↗</span>
-            </div>
-          </div>
-        </section>
-        <div className="principle-strip container">
-          <span className="mono">BUILT AROUND YOUR AGENTS</span>
-          <span>Scoped permissions</span>
-          <span>Recorded provenance</span>
-          <span>Selective recovery</span>
-          <Mark />
-        </div>
-        <section className="security-section container" id="security">
-          <div className="section-heading">
-            <div>
-              <span className="eyebrow">SECURITY AT EVERY HANDOFF</span>
-              <h2>
-                One bad input.
-                <br />
-                <em>Not a lost workflow.</em>
-              </h2>
-            </div>
-            <p>
-              A poisoned document can travel further than you think. Bastion
-              puts controls between what an agent reads, shares, and executes.
-            </p>
-          </div>
-          <div
-            className="process-tabs"
-            role="tablist"
-            aria-label="Security process"
-          >
-            <button
-              role="tab"
-              id="tab-trace"
-              aria-controls="process-panel"
-              aria-selected={step === "trace"}
-              onClick={() => setStep("trace")}
-            >
-              <span className="mono">01 /</span> Trace <Arrow />
-            </button>
-            <button
-              role="tab"
-              id="tab-contain"
-              aria-controls="process-panel"
-              aria-selected={step === "contain"}
-              onClick={() => setStep("contain")}
-            >
-              <span className="mono">02 /</span> Contain <Arrow />
-            </button>
-            <button
-              role="tab"
-              id="tab-recover"
-              aria-controls="process-panel"
-              aria-selected={step === "recover"}
-              onClick={() => setStep("recover")}
-            >
-              <span className="mono">03 /</span> Recover <Arrow />
-            </button>
-          </div>
-          <div
-            id="process-panel"
-            role="tabpanel"
-            aria-labelledby={`tab-${step}`}
-            className="process-panel"
-          >
-            <div className="process-visual" aria-hidden="true">
-              <div className={`boundary-diagram ${step}`}>
-                <span className="diagram-source">Untrusted input</span>
-                <span className="diagram-line" />
-                <div className="diagram-gate">
-                  <Mark />
-                  <span>BASTION</span>
-                </div>
-                <span className="diagram-line" />
-                <span className="diagram-output">
-                  {step === "trace"
-                    ? "Recorded dependency"
-                    : step === "contain"
-                      ? "Action boundary"
-                      : "Trusted replacement"}
-                </span>
-                <div className="diagram-caption mono">
-                  {step === "trace"
-                    ? "OBSERVE THE HANDOFF"
-                    : step === "contain"
-                      ? "AUTHORIZE BEFORE EXECUTION"
-                      : "RERUN AFFECTED TASKS"}
-                </div>
-              </div>
-            </div>
-            <div className="process-description">
-              <span className="eyebrow">{step.toUpperCase()}</span>
-              <h3>
-                {step === "trace"
-                  ? "Follow the evidence."
-                  : step === "contain"
-                    ? "Stop it at the boundary."
-                    : "Keep the good work."}
-              </h3>
+            <p className="hero__hand">stop the breach. save the workflow.</p>
+            <div className="hero__lede">
               <p>
-                {step === "trace"
-                  ? "Connect source versions, agent tasks, artifacts, and tool calls in an inspectable knowledge graph. See the dependencies your workflow actually recorded."
-                  : step === "contain"
-                    ? "Check mediated tool calls against scoped permissions before execution. Quarantine suspicious sources and pause their dependent tasks."
-                    : "Review the impact, approve a recovery plan, and rerun affected repeatable tasks using trusted inputs. Preserve unaffected validated outputs."}
+                An agent workspace.
+                <br />
+                <strong>Security built in.</strong>
               </p>
-              <a href="/architecture" className="text-link">
-                Explore the architecture <Arrow />
+            </div>
+            <div className="hero__actions">
+              <a className="btn btn--solid" href="/dashboard">
+                open console <span aria-hidden="true">↗</span>
+              </a>
+              <a className="btn btn--ghost" href="/arena">
+                enter arena <span aria-hidden="true">→</span>
               </a>
             </div>
-          </div>
+          </motion.div>
         </section>
-        <section className="arena-teaser container">
-          <div>
-            <span className="eyebrow">THE BASTION ARENA</span>
-            <h2>
-              Attack the input.
+        <section className="band band--ink" id="security">
+          <Reveal className="band__head">
+            <span className="numeral">01</span>
+            <h2 className="huge">
+              One bad input.
               <br />
-              <em>Defend the outcome.</em>
+              <span className="u">Not a lost workflow.</span>
             </h2>
-            <p>
-              A shared, sandboxed agent workflow. Private roles. Real security
-              decisions. Join from your phone and put the boundaries to the
-              test.
-            </p>
-            <a href="/arena" className="button">
-              Enter the arena <Arrow diagonal />
-            </a>
-          </div>
-          <div className="arena-teaser-art" aria-hidden="true">
-            <div className="target-ring">
-              <Mark />
-              <span className="target-cross top" />
-              <span className="target-cross bottom" />
-              <span className="target-cross left" />
-              <span className="target-cross right" />
-            </div>
-            <span className="mono">ATTACK / INVESTIGATE / RECOVER</span>
+          </Reveal>
+          <div className="ledger">
+            <Reveal className="ledger__row">
+              <span className="ledger__n">i.</span>
+              <h3>Prompt injection</h3>
+              <div className="threat-path">
+                <span>input</span>
+                <span aria-hidden="true">→</span>
+                <span className="threat-stop">policy gate ⊣</span>
+              </div>
+              <span className="ledger__tag">contain</span>
+            </Reveal>
+            <Reveal className="ledger__row" delay={0.06}>
+              <span className="ledger__n">ii.</span>
+              <h3>Unsafe tool use</h3>
+              <div className="threat-path">
+                <span>tool call</span>
+                <span aria-hidden="true">→</span>
+                <span className="threat-stop">permission check ⊣</span>
+              </div>
+              <span className="ledger__tag">authorize</span>
+            </Reveal>
+            <Reveal className="ledger__row" delay={0.12}>
+              <span className="ledger__n">iii.</span>
+              <h3>Compromised outputs</h3>
+              <div className="threat-path">
+                <span>dependency</span>
+                <span aria-hidden="true">→</span>
+                <span className="threat-stop">selective rerun ↻</span>
+              </div>
+              <span className="ledger__tag">recover</span>
+            </Reveal>
           </div>
         </section>
-        <section className="closing container">
-          <span className="eyebrow">BUILD WITH CONFIDENCE</span>
-          <h2>
-            Give your agents freedom.
-            <br />
-            <em>Give their actions boundaries.</em>
-          </h2>
-          <a href="/dashboard" className="button">
-            Open your workspace <Arrow />
+        <section className="band band--paper" id="model">
+          <Reveal className="band__head">
+            <span className="numeral">02</span>
+            <h2 className="huge huge--ink">
+              Freedom to reason.
+              <br />
+              Boundaries to act.
+            </h2>
+          </Reveal>
+          <div className="model">
+            <Reveal>
+              <ol className="security-steps">
+                <li>
+                  <span>01</span>
+                  <div>
+                    <h3>Trace.</h3>
+                    <p>Every recorded handoff.</p>
+                  </div>
+                  <span aria-hidden="true">↗</span>
+                </li>
+                <li>
+                  <span>02</span>
+                  <div>
+                    <h3>Contain.</h3>
+                    <p>Before the action executes.</p>
+                  </div>
+                  <span aria-hidden="true">⊣</span>
+                </li>
+                <li>
+                  <span>03</span>
+                  <div>
+                    <h3>Recover.</h3>
+                    <p>Only the affected work.</p>
+                  </div>
+                  <span aria-hidden="true">↻</span>
+                </li>
+              </ol>
+              <a href="/architecture" className="btn btn--ghost">
+                under the hood ↗
+              </a>
+            </Reveal>
+            <Reveal delay={0.1}>
+              <Envelope />
+            </Reveal>
+          </div>
+        </section>
+        <section className="band band--ink" id="flow">
+          <Reveal className="band__head">
+            <span className="numeral">03</span>
+            <h2 className="huge">
+              Nothing hidden.
+              <br />
+              Everything <span className="u">traceable.</span>
+            </h2>
+          </Reveal>
+          <div className="flow">
+            <Reveal>
+              <Terminal />
+            </Reveal>
+            <Reveal className="flow__side" delay={0.1}>
+              <div className="workflow-glyph" aria-hidden="true">
+                <span>◇</span>
+                <i />
+                <span>◈</span>
+                <i />
+                <span>▣</span>
+              </div>
+              <div className="workflow-links">
+                <a href="/dashboard">
+                  provenance graph <span>↗</span>
+                </a>
+                <a href="/dashboard">
+                  tool decisions <span>↗</span>
+                </a>
+                <a href="/dashboard">
+                  recovery plans <span>↗</span>
+                </a>
+              </div>
+            </Reveal>
+          </div>
+        </section>
+        <section className="closer">
+          <Koi className="koi koi--closer" />
+          <h2 className="closer__line">YOUR MOVE.</h2>
+          <p className="closer__sub">attack the input. defend the outcome.</p>
+          <a href="/arena" className="btn btn--invert">
+            enter the arena <span aria-hidden="true">→</span>
           </a>
         </section>
-        <div className="wordmark-section" aria-hidden="true">
-          {reduced ? (
-            <div className="static-wordmark">BASTION</div>
-          ) : (
-            <VectorWordmark
-              text="BASTION"
-              textColor="#ffffff"
-              shade="#464a4d"
-              accent="#9281f7"
-              font={{
-                fontFamily: "Inter, sans-serif",
-                fontWeight: 600,
-                fontSize: 245,
-                letterSpacing: "-0.045em",
-              }}
-              handles={{ labels: false, size: 30, spread: 22 }}
-              style={{
-                minWidth: 0,
-                minHeight: 0,
-                height: "100%",
-                width: "100%",
-              }}
-            />
-          )}
-        </div>
       </main>
       <Footer />
-      {!reduced && (
-        <div className="click-effects" aria-hidden="true">
-          <MouseEffects
-            interactionMode="rings"
-            color="#a1a4a5"
-            effectSize={32}
-            duration={0.3}
-            strokeWidth={1}
-            showLabel={false}
-          />
-        </div>
-      )}
     </>
   );
 }

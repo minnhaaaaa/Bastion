@@ -1,73 +1,71 @@
-import { Header, Footer, Arrow } from "../components/ui";
+import { Header, Footer } from "../components/ui";
+import { Reveal } from "../components/wenvy/Reveal";
+import { Envelope } from "../components/wenvy/Envelope";
 export function Architecture() {
   return (
     <>
       <Header active="architecture" />
-      <main id="main" tabIndex={-1} className="container architecture">
-        <span className="eyebrow">UNDER THE HOOD</span>
-        <h1>
-          Security is
-          <br />
-          <em>a boundary.</em>
-        </h1>
-        <p className="lead">
-          Agents reason. Application code authorizes. Bastion coordinates the
-          handoffs and keeps a record of what happened.
-        </p>
-        <div className="architecture-flow">
-          <span>Agent runtime</span>
-          <Arrow />
-          <span>Artifact broker</span>
-          <Arrow />
-          <span>Policy gate</span>
-          <Arrow />
-          <span>Controlled tools</span>
-        </div>
-        <div className="architecture-grid">
-          <article>
-            <span className="eyebrow">INTERFACE</span>
-            <h2>React + Vite</h2>
-            <p>
-              TypeScript components, React Query for backend state, React Flow
-              for provenance, and Barba for page transitions.
-            </p>
-          </article>
-          <article>
-            <span className="eyebrow">COORDINATION</span>
-            <h2>Fastify + Pi</h2>
-            <p>
-              A TypeScript DAG orchestrator delegates tasks to isolated Pi
-              sessions. Socket.IO delivers persisted events to the console.
-            </p>
-          </article>
-          <article>
-            <span className="eyebrow">EVIDENCE</span>
-            <h2>Postgres + Neo4j</h2>
-            <p>
-              Postgres holds authoritative records. Neo4j projects source, task,
-              artifact, and tool dependencies for investigation.
-            </p>
-          </article>
-          <article>
-            <span className="eyebrow">EXECUTION</span>
-            <h2>Policy + Docker</h2>
-            <p>
-              Scoped capabilities and deterministic checks gate supported tool
-              calls. Isolated workers provide a separate sandbox boundary.
-            </p>
-          </article>
-        </div>
-        <div className="boundary-note">
-          <span className="eyebrow">THE SECURITY CLAIM</span>
-          <p>
-            Specified policies at controlled execution boundaries. Traceable
-            observed dependencies. Detection is best effort; coverage depends on
-            the tools and channels Bastion mediates.
+      <main id="main" tabIndex={-1} className="architecture wenvy-site">
+        <section className="band band--paper architecture-intro">
+          <span className="numeral">BASTION / ARCHITECTURE</span>
+          <h1 className="huge huge--ink">
+            Agents reason.
+            <br />
+            Code <span className="u">authorizes.</span>
+          </h1>
+          <div className="model">
+            <div className="architecture-stack">
+              <div>
+                <span>Interface</span>
+                <strong>React · Vite · Barba</strong>
+              </div>
+              <div>
+                <span>Coordination</span>
+                <strong>Fastify · Pi · Socket.IO</strong>
+              </div>
+              <div>
+                <span>Evidence</span>
+                <strong>Postgres · Neo4j</strong>
+              </div>
+              <div>
+                <span>Execution</span>
+                <strong>Policy gate · Docker</strong>
+              </div>
+            </div>
+            <Reveal>
+              <Envelope />
+            </Reveal>
+          </div>
+        </section>
+        <section className="band band--ink">
+          <div className="pipe">
+            <div className="pipe__stage">
+              <span className="pipe__name">Input</span>
+              <span className="pipe__class">trust labels</span>
+            </div>
+            <span className="pipe__arrow" aria-hidden="true">
+              →
+            </span>
+            <div className="pipe__stage">
+              <span className="pipe__name">Handoff</span>
+              <span className="pipe__class">artifact broker</span>
+            </div>
+            <span className="pipe__arrow" aria-hidden="true">
+              →
+            </span>
+            <div className="pipe__stage pipe__stage--prod">
+              <span className="pipe__name">Action</span>
+              <span className="pipe__class">authorize first</span>
+            </div>
+          </div>
+          <p className="scope-note">
+            Policy enforcement covers mediated tools. Injection detection is
+            best effort.
           </p>
-        </div>
-        <a className="button" href="/dashboard">
-          Explore the console <Arrow />
-        </a>
+          <a className="btn btn--invert" href="/dashboard">
+            open console ↗
+          </a>
+        </section>
       </main>
       <Footer />
     </>

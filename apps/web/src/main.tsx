@@ -52,10 +52,15 @@ barba.init({
         roots.delete(current.container);
       },
       async enter({ next }) {
-        const path = new URL(next.url.href, window.location.origin).pathname;
+        const destination = new URL(next.url.href, window.location.origin);
+        const path = destination.pathname;
         mount(next.container, path);
         window.scrollTo(0, 0);
         await fade(next.container, true);
+        if (destination.hash)
+          document
+            .getElementById(decodeURIComponent(destination.hash.slice(1)))
+            ?.scrollIntoView();
         document
           .getElementById("transition-loader")!
           .classList.remove("active");

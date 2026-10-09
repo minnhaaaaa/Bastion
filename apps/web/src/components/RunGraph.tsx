@@ -68,13 +68,13 @@ export function RunGraph({
       ...edge,
       label: edge.relation,
       markerEnd: { type: MarkerType.ArrowClosed },
-      style: { stroke: "#6e727a" },
+      style: { stroke: "#c9b48b" },
     }));
     return { nodes, edges };
   }, [snapshot]);
   if (!graph.nodes.length)
     return (
-      <Empty title="Your evidence graph starts here">
+      <Empty title="No run selected">
         Run a workflow to see recorded source, task, artifact, and tool
         dependencies.
       </Empty>
@@ -90,7 +90,7 @@ export function RunGraph({
       colorMode="dark"
       minZoom={0.15}
     >
-      <Background color="#292d30" gap={28} />
+      <Background color="#30281d" gap={28} />
       <Controls showInteractive={false} />
     </ReactFlow>
   );
