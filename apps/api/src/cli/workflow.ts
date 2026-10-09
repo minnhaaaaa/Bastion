@@ -86,5 +86,11 @@ export async function main(argv: string[], env: NodeJS.ProcessEnv, out: Out): Pr
 }
 
 if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href) {
+  // Load the repo-root .env if present; variables already set in the shell take precedence.
+  try {
+    process.loadEnvFile(new URL("../../../../.env", import.meta.url));
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+  }
   process.exit(await main(process.argv.slice(2), process.env, { log: console.log, error: console.error }));
 }

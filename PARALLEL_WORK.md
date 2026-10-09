@@ -17,9 +17,9 @@ Rules (unchanged): **zero hardcoded data** (TEAM_PLAN.md → Rule #1), `packages
 ## Member 3: data, recovery, API
 
 ### A1. Run it on real infrastructure *(do first: unblocks everyone)*
-- [ ] Install Docker. Fill `.env` from `.env.example`, then `docker compose up -d` and `pnpm db:migrate`.
-- [ ] Run the live Neo4j test (`NEO4J_TEST_URI`/`_USER`/`_PASSWORD`, then `pnpm test`). Check that `/api/runs/:id/impact` returns both the Postgres and the Neo4j impact sets, and that they agree.
-- [ ] Start the API with `AGENT_RUNTIME=disabled` and give Member 1 the URL and an operator token.
+- [x] Install Docker. Fill `.env` from `.env.example`, then `docker compose up -d` and `pnpm db:migrate`.
+- [x] Run the live Neo4j test (`NEO4J_TEST_URI`/`_USER`/`_PASSWORD`, then `pnpm test`). Check that `/api/runs/:id/impact` returns both the Postgres and the Neo4j impact sets, and that they agree.
+- [x] Start the API with `AGENT_RUNTIME=disabled` (verified locally against real Postgres + Neo4j). Still to do: share a URL Member 1 can reach (LAN IP or a tunnel; set `WEB_ORIGIN` to their dev origin) and an operator token.
 - **Done when:** Member 1's app talks to a live API backed by real Postgres and Neo4j.
 
 ### A2. Workflow submission tooling *(a tool, not data)*

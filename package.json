@@ -12,8 +12,8 @@
     "db:generate": "pnpm --filter @bastion/db generate",
     "db:migrate": "pnpm --filter @bastion/db migrate",
     "workflow:validate": "pnpm --filter @bastion/api exec tsx src/cli/workflow.ts validate",
-    "workflow:submit": "pnpm --filter @bastion/api exec tsx --env-file=../../.env src/cli/workflow.ts submit",
-    "workflow:project": "pnpm --filter @bastion/api exec tsx --env-file=../../.env src/cli/workflow.ts project"
+    "workflow:submit": "pnpm --filter @bastion/api exec tsx src/cli/workflow.ts submit",
+    "workflow:project": "pnpm --filter @bastion/api exec tsx src/cli/workflow.ts project"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
