@@ -1,5 +1,5 @@
 {
-  "name": "@splitbrain/provenance",
+  "name": "@bastion/provenance",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -8,7 +8,7 @@
   "exports": { ".": "./src/index.ts" },
   "scripts": { "typecheck": "tsc -p tsconfig.json" },
   "dependencies": {
-    "@splitbrain/contracts": "workspace:*",
-    "@splitbrain/db": "workspace:*"
+    "@bastion/contracts": "workspace:*",
+    "@bastion/db": "workspace:*"
   }
 }

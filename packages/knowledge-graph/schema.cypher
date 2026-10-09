@@ -1,4 +1,4 @@
-// SPLITBRAIN knowledge graph schema (ARCHITECTURE §6.1). Apply once at startup (idempotent).
+// Bastion knowledge graph schema (ARCHITECTURE §6.1). Apply once at startup (idempotent).
 // Projection only: written by the backend projector from committed events, never by clients.
 //
 // Edge direction: all provenance edges point DOWNSTREAM (data-flow) — see contracts/src/reduce.ts.

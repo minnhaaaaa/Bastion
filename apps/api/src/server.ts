@@ -1,7 +1,7 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { Server } from "socket.io";
-import type { ClientToServerEvents, ServerToClientEvents } from "@splitbrain/contracts";
+import type { ClientToServerEvents, ServerToClientEvents } from "@bastion/contracts";
 
 /**
  * Fastify control plane (Member 3). Skeleton only:

@@ -1,5 +1,5 @@
 {
-  "name": "@splitbrain/db",
+  "name": "@bastion/db",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -14,7 +14,7 @@
     "migrate": "node --env-file=../../.env ./node_modules/drizzle-kit/bin.cjs migrate"
   },
   "dependencies": {
-    "@splitbrain/contracts": "workspace:*",
+    "@bastion/contracts": "workspace:*",
     "drizzle-orm": "^0.38.0",
     "postgres": "^3.4.5"
   },

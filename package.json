@@ -1,5 +1,5 @@
 {
-  "name": "splitbrain",
+  "name": "bastion",
   "private": true,
   "packageManager": "pnpm@11.24.0",
   "scripts": {
@@ -9,8 +9,8 @@
     "lint": "turbo run typecheck",
     "test": "vitest run",
     "test:watch": "vitest",
-    "db:generate": "pnpm --filter @splitbrain/db generate",
-    "db:migrate": "pnpm --filter @splitbrain/db migrate"
+    "db:generate": "pnpm --filter @bastion/db generate",
+    "db:migrate": "pnpm --filter @bastion/db migrate"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

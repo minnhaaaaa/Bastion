@@ -1,5 +1,5 @@
 {
-  "name": "@splitbrain/knowledge-graph",
+  "name": "@bastion/knowledge-graph",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -8,7 +8,7 @@
   "exports": { ".": "./src/index.ts" },
   "scripts": { "typecheck": "tsc -p tsconfig.json" },
   "dependencies": {
-    "@splitbrain/contracts": "workspace:*",
+    "@bastion/contracts": "workspace:*",
     "neo4j-driver": "^5.27.0"
   }
 }

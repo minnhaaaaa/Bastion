@@ -1,6 +1,6 @@
 /**
  * Authoritative PostgreSQL schema (ARCHITECTURE §7).
- * Enum values come from @splitbrain/contracts so DB and wire types cannot drift.
+ * Enum values come from @bastion/contracts so DB and wire types cannot drift.
  * Neo4j is a projection of `events` + `dependency_edges`; it is never written to directly.
  */
 import {
@@ -15,7 +15,7 @@ import {
   timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
-import * as C from "@splitbrain/contracts";
+import * as C from "@bastion/contracts";
 
 const opts = <T extends readonly [string, ...string[]]>(e: { options: T }) => e.options as unknown as [T[number], ...T[number][]];
 
