@@ -57,6 +57,35 @@ export const AttackPayloadDefinition = z.object({
 });
 export type AttackPayloadDefinition = z.infer<typeof AttackPayloadDefinition>;
 
+/** RFC 6901 JSON pointer ("" = whole document). */
+const JsonPointer = z.string().regex(/^(\/([^~/]|~[01])*)*$/, "invalid JSON pointer");
+
+/**
+ * Workflow-declared verification (CONTRACT_PROPOSAL B4). Selection is explicit workflow data;
+ * model outputs never choose their own checks.
+ *  - SOURCE_QUOTE: strings selected from the task's output (parsed as JSON) must appear verbatim in
+ *    the cited TRUSTED sources that the output observably descends from.
+ *  - TOOL: a registered tool call run through the policy gateway inside the named VERIFIER task.
+ */
+export const AcceptanceCheck = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("SOURCE_QUOTE"),
+    id: z.string().min(1),
+    taskId: Id.TaskId,
+    pointers: z.array(JsonPointer).min(1),
+    sourceNames: z.array(z.string()).min(1),
+  }),
+  z.object({
+    kind: z.literal("TOOL"),
+    id: z.string().min(1),
+    taskId: Id.TaskId,
+    tool: z.string().min(1),
+    /** Exact arguments (for proc.exec: executable + argv). Never a shell string. */
+    args: z.record(z.unknown()),
+  }),
+]);
+export type AcceptanceCheck = z.infer<typeof AcceptanceCheck>;
+
 export const WorkflowDefinition = z
   .object({
     name: z.string().min(1),
@@ -65,6 +94,8 @@ export const WorkflowDefinition = z
     tasks: z.array(TaskDefinition).min(1),
     policyRules: z.array(PolicyRule),
     attackPayloads: z.array(AttackPayloadDefinition).default([]),
+    /** Optional; absent = no workflow-declared checks (only the built-in state/audit checks run). */
+    acceptanceChecks: z.array(AcceptanceCheck).optional(),
   })
   .superRefine((w, ctx) => {
     const agents = new Set(w.agents.map((a) => a.id));
@@ -88,6 +119,25 @@ export const WorkflowDefinition = z
     for (const p of w.attackPayloads)
       if (!sources.has(p.targetSourceName))
         ctx.addIssue({ code: "custom", message: `attack payload ${p.id}: unknown source ${p.targetSourceName}` });
+    const checkIds = new Set<string>();
+    for (const c of w.acceptanceChecks ?? []) {
+      if (checkIds.has(c.id)) ctx.addIssue({ code: "custom", message: `duplicate acceptance check id ${c.id}` });
+      checkIds.add(c.id);
+      const task = w.tasks.find((t) => t.id === c.taskId);
+      if (!task) {
+        ctx.addIssue({ code: "custom", message: `acceptance check ${c.id}: unknown task ${c.taskId}` });
+        continue;
+      }
+      if (c.kind === "SOURCE_QUOTE") {
+        for (const n of c.sourceNames) {
+          const src = w.sources.find((x) => x.name === n);
+          if (!src) ctx.addIssue({ code: "custom", message: `acceptance check ${c.id}: unknown source ${n}` });
+          else if (src.trust !== "TRUSTED") ctx.addIssue({ code: "custom", message: `acceptance check ${c.id}: cited source ${n} must be TRUSTED` });
+        }
+      } else if (w.agents.find((a) => a.id === task.agentId)?.role !== "VERIFIER") {
+        ctx.addIssue({ code: "custom", message: `acceptance check ${c.id}: TOOL checks must run in a VERIFIER task` });
+      }
+    }
     if (findCycle(w.tasks)) ctx.addIssue({ code: "custom", message: "task graph has a cycle" });
   });
 export type WorkflowDefinition = z.infer<typeof WorkflowDefinition>;

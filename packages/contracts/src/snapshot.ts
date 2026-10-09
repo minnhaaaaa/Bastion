@@ -9,6 +9,7 @@ import {
   SecurityIncident,
   SourceVersion,
   TaskExecution,
+  ToolApprovalView,
   TaskSpec,
   ToolRequest,
 } from "./entities";
@@ -33,6 +34,8 @@ export const RunSnapshot = z.object({
   incidents: z.record(SecurityIncident),
   plans: z.record(RecoveryPlan),
   approvals: z.record(ApprovalRequest),
+  /** Tool-call approvals (separate from recovery approvals). */
+  toolApprovals: z.record(ToolApprovalView),
   alerts: z.array(z.object({ seq: z.number(), targetId: z.string(), detector: z.string(), reason: z.string() })),
   verification: z
     .array(z.object({ name: z.string(), passed: z.boolean(), detail: z.string().optional() }))

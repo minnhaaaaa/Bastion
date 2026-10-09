@@ -49,6 +49,10 @@ export type IncidentState = z.infer<typeof IncidentState>;
 export const ApprovalStatus = z.enum(["PENDING", "APPROVED", "REJECTED", "EXPIRED", "CONSUMED"]);
 export type ApprovalStatus = z.infer<typeof ApprovalStatus>;
 
+/** Lifecycle of a REQUIRE_APPROVAL tool call. CONSUMED = approved and executed (at most once). */
+export const ToolApprovalStatus = z.enum(["PENDING", "CONSUMED", "REJECTED", "EXPIRED", "CANCELLED"]);
+export type ToolApprovalStatus = z.infer<typeof ToolApprovalStatus>;
+
 export const AgentRole = z.enum(["RESEARCH", "BUILDER", "VERIFIER"]);
 export type AgentRole = z.infer<typeof AgentRole>;
 

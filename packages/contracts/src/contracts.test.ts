@@ -173,4 +173,48 @@ describe("schemas", () => {
     expect(WorkflowDefinition.safeParse(def([t2])).success).toBe(false);
     expect(WorkflowDefinition.safeParse(def([newId("task")])).success).toBe(false);
   });
+
+  it("acceptance checks: references, trust and VERIFIER role are validated", () => {
+    const [ra, va] = [newId("agent"), newId("agent")];
+    const [rt, vt] = [newId("task"), newId("task")];
+    const rp = { maxAttempts: 1, idempotent: true };
+    const base = {
+      name: "w",
+      agents: [{ id: ra, role: "RESEARCH", capabilities: [] }, { id: va, role: "VERIFIER", capabilities: [] }],
+      sources: [{ name: "trusted", trust: "TRUSTED", classification: "PUBLIC", location: "a" }, { name: "untrusted", trust: "UNTRUSTED", classification: "PUBLIC", location: "b" }],
+      tasks: [
+        { id: rt, agentId: ra, title: "r", declaredDeps: [], sourceNames: ["trusted"], produces: "x", retryPolicy: rp },
+        { id: vt, agentId: va, title: "v", declaredDeps: [rt], sourceNames: [], produces: "y", retryPolicy: rp },
+      ],
+      policyRules: [],
+    };
+    const ok = { ...base, acceptanceChecks: [
+      { kind: "SOURCE_QUOTE", id: "q", taskId: rt, pointers: ["/a/0", ""], sourceNames: ["trusted"] },
+      { kind: "TOOL", id: "t", taskId: vt, tool: "run", args: { executable: "/bin/true", argv: [] } },
+    ] };
+    expect(WorkflowDefinition.safeParse(ok).success).toBe(true);
+    expect(WorkflowDefinition.safeParse(base).success).toBe(true); // optional
+    const bad = (c: object) => WorkflowDefinition.safeParse({ ...base, acceptanceChecks: [c] }).success;
+    expect(bad({ kind: "SOURCE_QUOTE", id: "q", taskId: rt, pointers: ["/a"], sourceNames: ["untrusted"] })).toBe(false);
+    expect(bad({ kind: "SOURCE_QUOTE", id: "q", taskId: rt, pointers: ["no-slash"], sourceNames: ["trusted"] })).toBe(false);
+    expect(bad({ kind: "TOOL", id: "t", taskId: rt, tool: "run", args: {} })).toBe(false); // not a VERIFIER task
+    expect(bad({ kind: "TOOL", id: "t", taskId: newId("task"), tool: "run", args: {} })).toBe(false);
+  });
+
+  it("tool approval events reduce into a separate collection with tapr_ ids", () => {
+    const { events } = buildRun();
+    const last = events.at(-1)!;
+    const approvalId = newId("toolApproval");
+    const toolRequestId = Object.keys(replay(events).toolRequests)[0]!;
+    const mk = (seq: number, type: string, payload: object) =>
+      RunEvent.parse({ eventId: newId("event"), runId: last.runId, seq, timestamp: new Date(Date.UTC(2026, 1, 1)).toISOString(), traceId: newId("trace"), type, payload });
+    const req = mk(last.seq + 1, "tool.approval_requested", { approvalId, toolRequestId, executionId: newId("exec"), actionDigest: "d", expiresAt: new Date(Date.UTC(2026, 1, 2)).toISOString(), operation: "net.http", resourcePreview: "https://x/y" });
+    let s = applyEvent(replay(events), req);
+    expect(s.toolApprovals[approvalId]).toMatchObject({ status: "PENDING", actorId: null });
+    expect(Object.keys(s.approvals)).not.toContain(approvalId);
+    s = applyEvent(s, mk(last.seq + 2, "tool.approval_resolved", { approvalId, toolRequestId, status: "CONSUMED", actorId: "user_x", reason: "ok" }));
+    expect(s.toolApprovals[approvalId]).toMatchObject({ status: "CONSUMED", actorId: "user_x" });
+    expect(() => mk(last.seq + 3, "tool.approval_resolved", { approvalId, toolRequestId, status: "PENDING", actorId: "x" })).toThrow();
+    expect(() => mk(last.seq + 3, "tool.approval_requested", { approvalId: newId("approval"), toolRequestId, executionId: newId("exec"), actionDigest: "d", expiresAt: new Date().toISOString(), operation: "x", resourcePreview: "" })).toThrow();
+  });
 });

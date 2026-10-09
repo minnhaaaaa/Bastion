@@ -4,7 +4,7 @@ import type { ArtifactBroker, EventJournal, PolicyRequest, ToolCall, ToolCallRes
 import type { DispatchContext, NormalizedCall } from "./index";
 
 export type PendingToolApproval = {
-  id: string; actionDigest: string; expiresAt: string; status: "PENDING" | "CONSUMED" | "REJECTED";
+  id: string; actionDigest: string; expiresAt: string; status: "PENDING" | "CONSUMED" | "REJECTED" | "EXPIRED" | "CANCELLED";
   workflowId: string; workflowVersion: number; call: ToolCall; request: PolicyRequest; ruleId: string;
 };
 /** Implement in Postgres. Raw arguments are private and must never appear in run events. */
@@ -43,7 +43,7 @@ export class ToolApprovalService {
   async request(call: ToolCall, request: PolicyRequest, ruleId: string): Promise<string> {
     if (call.runId !== request.runId || call.executionId !== request.executionId || call.agentId !== request.agentId || call.tool !== request.tool) throw new Error("Approval request identity mismatch");
     const pinned = await this.options.pinnedWorkflow(call.runId);
-    const data = structuredClone({ id: newId("approval"), workflowId: pinned.id, workflowVersion: pinned.version, call, request, ruleId, expiresAt: new Date(this.options.now().getTime() + this.options.ttlMs).toISOString() });
+    const data = structuredClone({ id: newId("toolApproval"), workflowId: pinned.id, workflowVersion: pinned.version, call, request, ruleId, expiresAt: new Date(this.options.now().getTime() + this.options.ttlMs).toISOString() });
     const actionDigest = toolApprovalDigest(data);
     await this.options.store.insert({ ...data, actionDigest, status: "PENDING" });
     return data.id;

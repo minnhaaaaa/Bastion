@@ -24,7 +24,7 @@ await graph.start(await loadSchemaStatements());
 
 // ── Agent runtime (Member 2: Pi + gateway + sandbox + scheduler + runner) ─────
 // Enabled only by explicit configuration; never substituted with fakes.
-const runtime = env.AGENT_RUNTIME === "enabled" ? buildAgentRuntime({ env: process.env, journal, broker, workflows }) : undefined;
+const runtime = env.AGENT_RUNTIME === "enabled" ? buildAgentRuntime({ env: process.env, db: pg.db, journal, broker, workflows }) : undefined;
 if (!runtime) console.warn("AGENT_RUNTIME=disabled: runs and arena rounds cannot start");
 
 const recovery = new RecoveryManager({
@@ -52,6 +52,7 @@ const { app } = await buildServer(
     commands: new CommandStore(pg.db),
     launcher: runtime?.launcher,
     runtimeInfo: runtime?.info,
+    toolApprovals: runtime?.toolApprovals,
     audit: runtime?.audit,
     graph,
     operators: env.OPERATOR_TOKENS,
@@ -70,10 +71,11 @@ const { app } = await buildServer(
 
 // Close out work that was in flight before this process started (listeners are attached now).
 const reconciled = await reconcileOnBoot({ db: pg.db, journal, scheduler: runtime?.scheduler });
-if (reconciled.failedRuns.length || reconciled.adopted.length) console.warn("boot reconciliation", reconciled);
+if (reconciled.failedRuns.length || reconciled.adopted.length || reconciled.expiredToolApprovals.length) console.warn("boot reconciliation", reconciled);
 
 const shutdown = async () => {
   await app.close();
+  runtime?.toolApprovals.stop();
   recovery.stop();
   await recovery.idle();
   await graph.stop();

@@ -50,6 +50,7 @@ export function emptySnapshot(
     incidents: {},
     plans: {},
     approvals: {},
+    toolApprovals: {},
     alerts: [],
     verification: null,
     graphProjectedUpTo: 0,
@@ -251,6 +252,34 @@ export function applyEvent(prev: RunSnapshot | null, e: RunEvent): RunSnapshot {
     case "tool.executed": {
       const t = s.toolRequests[e.payload.toolRequestId];
       if (t) t.executionOutcome = e.payload.outcome;
+      break;
+    }
+
+    case "tool.approval_requested": {
+      const p = e.payload;
+      s.toolApprovals[p.approvalId] = {
+        id: p.approvalId,
+        runId: e.runId,
+        executionId: p.executionId,
+        toolRequestId: p.toolRequestId,
+        actionDigest: p.actionDigest,
+        expiresAt: p.expiresAt,
+        status: "PENDING",
+        operation: p.operation,
+        resourcePreview: p.resourcePreview,
+        actorId: null,
+        reason: null,
+      };
+      break;
+    }
+
+    case "tool.approval_resolved": {
+      const a = s.toolApprovals[e.payload.approvalId];
+      if (a) {
+        a.status = e.payload.status;
+        a.actorId = e.payload.actorId;
+        a.reason = e.payload.reason ?? null;
+      }
       break;
     }
 

@@ -42,3 +42,14 @@ Member 1: approve the additive UI-facing views/events and pending-tool presentat
 Member 2: implementation is prepared in this change; review the exact schema proposal above.
 
 Member 3: approve schema/event additions, persistence/CAS semantics, the authenticated route and waiter/restart wiring. No API route or shared-schema migration is part of this proposal yet.
+
+## Member 3 acknowledgement (2026-10-09)
+
+**Approved**, with these conditions (implemented in the Member 3 side):
+
+1. **Separate ID namespace.** Tool approvals use the `tapr_` prefix (`ToolApprovalId`), so they can never be confused with recovery approvals (`appr_`).
+2. **Operators see the full target; everyone else only a redacted preview.** Events and snapshots, which room members can stream, carry only a redacted `resourcePreview` (origin + path without query, file path, or executable). The exact normalized target and arguments are available only to the project-owning operator via `GET /api/tool-approvals/:id`, and only operators can resolve. No arena route exposes or resolves tool approvals.
+3. **Restart = expiry.** Boot reconciliation resolves every `PENDING` tool approval as `EXPIRED` ("controller restarted").
+4. **Hold/quarantine cancel.** When an execution leaves `RUNNING`, or one of its consumed inputs becomes unusable, its pending approvals are resolved `CANCELLED` with an event, and the waiting tool call receives a denial.
+
+Implemented by Member 3: contracts (ids, `ToolApprovalStatus`, `tool.approval_requested` / `tool.approval_resolved`, `RunSnapshot.toolApprovals`, `ApproveToolCmd`, `WorkflowDefinition.acceptanceChecks`), the Postgres `ToolApprovalStore` (atomic CAS), `POST /api/tool-approvals/:id/resolve`, `GET /api/tool-approvals/:id`, `GET /api/runs/:id/tool-approvals`, the runtime waiter, cancellation, restart expiry, and `SOURCE_QUOTE` acceptance checks in the application verifier. `TOOL` acceptance checks run inside the verifier task (Member 2, scheduler side).

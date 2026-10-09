@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { FastifyInstance } from "fastify";
 import {
   ApproveRecoveryCmd,
+  ApproveToolCmd,
   CreateProjectCmd,
   CreateRunCmd,
   CreateWorkflowCmd,
@@ -195,6 +196,42 @@ export function coreRoutes(
     return x.idem.run(reply, { commandId: cmd.commandId, actorId: actor.userId, route: `incidents.open:${id}` }, async () => ({
       status: 201,
       body: await d.recovery.openIncident({ runId: id, sourceVersionId: cmd.sourceVersionId, severity: cmd.severity, reason: cmd.reason, triggerToolRequestId: null }),
+    }));
+  });
+
+  // ── Tool approvals (REQUIRE_APPROVAL tool calls) ─────────────────────────
+  /** Redacted views, from the event-sourced snapshot. */
+  app.get("/api/runs/:id/tool-approvals", async (req) => {
+    const { id } = IdParam.parse(req.params);
+    const s = await x.access.readRun(await any(req), id);
+    return Object.values(s.toolApprovals);
+  });
+
+  const ownedApproval = async (actor: Awaited<ReturnType<typeof op>>, id: string) => {
+    if (!d.toolApprovals) throw new HttpError("UNAVAILABLE", "agent runtime is not connected");
+    const runId = await d.toolApprovals.runOf(id);
+    if (!runId) throw notFound("tool approval");
+    await x.access.operatorRun(actor, runId);
+    return d.toolApprovals;
+  };
+
+  /** Operator-only: the exact normalized target and arguments being approved. */
+  app.get("/api/tool-approvals/:id", async (req) => {
+    const actor = await op(req);
+    const { id } = IdParam.parse(req.params);
+    const view = await (await ownedApproval(actor, id)).privateView(id);
+    if (!view) throw notFound("tool approval");
+    return view;
+  });
+
+  app.post("/api/tool-approvals/:id/resolve", async (req, reply) => {
+    const actor = await op(req);
+    const { id } = IdParam.parse(req.params);
+    const cmd = ApproveToolCmd.parse(req.body);
+    const approvals = await ownedApproval(actor, id);
+    return x.idem.run(reply, { commandId: cmd.commandId, actorId: actor.userId, route: `tool-approvals.resolve:${id}` }, async () => ({
+      status: 200,
+      body: await approvals.resolve({ approvalId: id, toolRequestId: cmd.toolRequestId, actionDigest: cmd.actionDigest, decision: cmd.decision, actorId: actor.userId }),
     }));
   });
 

@@ -10,6 +10,7 @@ import {
   Severity,
   SourceTrust,
   TaskState,
+  ToolApprovalStatus,
   ToolOutcome,
   VerificationOutcome,
 } from "./enums";
@@ -179,6 +180,24 @@ export const ToolExecuted = ev("tool.executed", {
   summary: Preview.optional(),
 });
 
+/** A REQUIRE_APPROVAL tool call is waiting for a human. Separate from recovery approvals. */
+export const ToolApprovalRequested = ev("tool.approval_requested", {
+  approvalId: Id.ToolApprovalId,
+  toolRequestId: Id.ToolRequestId,
+  executionId: Id.ExecutionId,
+  actionDigest: z.string(),
+  expiresAt: Timestamp,
+  operation: z.string(),
+  resourcePreview: Preview,
+});
+export const ToolApprovalResolved = ev("tool.approval_resolved", {
+  approvalId: Id.ToolApprovalId,
+  toolRequestId: Id.ToolRequestId,
+  status: ToolApprovalStatus.exclude(["PENDING"]),
+  actorId: z.string(),
+  reason: z.string().optional(),
+});
+
 // ── Detection (heuristic; never a security guarantee) ──────────────────────
 export const AlertSuspiciousContent = ev("alert.suspicious_content", {
   targetId: z.string(),
@@ -275,6 +294,8 @@ export const RunEvent = z.discriminatedUnion("type", [
   ToolRequested,
   ToolDecided,
   ToolExecuted,
+  ToolApprovalRequested,
+  ToolApprovalResolved,
   AlertSuspiciousContent,
   ClaimUnverified,
   IncidentOpened,

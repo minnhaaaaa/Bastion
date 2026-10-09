@@ -66,12 +66,12 @@ Rules (unchanged): **zero hardcoded data** (TEAM_PLAN.md → Rule #1), `packages
 - **Done when:** a real-model protected run and a real-model baseline run both complete on the shared dev API.
 
 ### B3. Tool-call approval path (`REQUIRE_APPROVAL`)
-- [ ] Today, any tool call that a policy marks `REQUIRE_APPROVAL` is always denied. Design a digest-bound, single-use, expiring tool approval, mirroring recovery approvals. Agree the additive contract changes (command, events) with Member 3, who builds the API route.
+- [x] Today, any tool call that a policy marks `REQUIRE_APPROVAL` is always denied. Design a digest-bound, single-use, expiring tool approval, mirroring recovery approvals. Agree the additive contract changes (command, events) with Member 3, who builds the API route.
 - **Done when:** a human can approve one exact pending tool call, and it then executes exactly once.
 
 ### B4. Verification depth (P1)
 - [ ] Emit `claim.unverified`: check selected claims in outputs against the run's brokered sources, and flag the ones that aren't supported.
-- [ ] Let workflows declare their own acceptance checks, such as an allowed `proc.exec` test command. The verifier runs these on top of the state-based checks in `apps/api/src/runtime/verification.ts`. This needs an additive `WorkflowDefinition` field, agreed with Member 3.
+- [~] Let workflows declare their own acceptance checks (schema + SOURCE_QUOTE done by Member 3; TOOL checks need the scheduler to run them inside the verifier task), such as an allowed `proc.exec` test command. The verifier runs these on top of the state-based checks in `apps/api/src/runtime/verification.ts`. This needs an additive `WorkflowDefinition` field, agreed with Member 3.
 
 ### B5. Remaining attack cards (P1)
 - [x] Confirm `REDIRECT_TOOL` and `LEAK_SECRET` work end to end once a workflow defines payloads for them. The runner already handles them generically, so this is about validation and tests, not new code paths.

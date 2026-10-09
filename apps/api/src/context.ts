@@ -18,6 +18,7 @@ import {
 } from "@bastion/db";
 import type { PgArtifactBroker } from "@bastion/provenance";
 import type { RecoveryManager } from "@bastion/recovery";
+import type { ToolApprovalCoordinator } from "./toolApprovals";
 import type { FastifyBaseLogger } from "fastify";
 import type { Actor } from "./auth";
 import { HttpError, forbidden, notFound } from "./errors";
@@ -35,6 +36,8 @@ export interface AppDeps {
   /** Member 2 runtime. Absent until wired: runs/rooms cannot start (503), reads still work. */
   launcher?: RunLauncher;
   audit?: TargetAudit;
+  /** Tool-call approvals (present when the runtime is enabled). */
+  toolApprovals?: ToolApprovalCoordinator;
   graph?: GraphProjector;
   operators: Map<string, string>;
   /** Model/runtime configuration recorded in exports (never credentials). */

@@ -14,6 +14,8 @@ export const ID_PREFIXES = {
   tool: "tool_",
   incident: "inc_",
   approval: "appr_",
+  /** Tool-call approvals; distinct from recovery approvals (appr_). */
+  toolApproval: "tapr_",
   plan: "plan_",
   room: "room_",
   player: "player_",
@@ -41,6 +43,7 @@ export const ArtifactVersionId = idOf("artifact");
 export const ToolRequestId = idOf("tool");
 export const IncidentId = idOf("incident");
 export const ApprovalId = idOf("approval");
+export const ToolApprovalId = idOf("toolApproval");
 export const PlanId = idOf("plan");
 export const RoomId = idOf("room");
 export const PlayerId = idOf("player");
@@ -61,6 +64,7 @@ export type ArtifactVersionId = z.infer<typeof ArtifactVersionId>;
 export type ToolRequestId = z.infer<typeof ToolRequestId>;
 export type IncidentId = z.infer<typeof IncidentId>;
 export type ApprovalId = z.infer<typeof ApprovalId>;
+export type ToolApprovalId = z.infer<typeof ToolApprovalId>;
 export type PlanId = z.infer<typeof PlanId>;
 export type RoomId = z.infer<typeof RoomId>;
 export type PlayerId = z.infer<typeof PlayerId>;

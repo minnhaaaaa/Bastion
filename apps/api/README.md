@@ -37,6 +37,9 @@ Every mutation body carries `commandId` (`newId("command")`). Replaying the same
 | `GET /api/runs/:id/metrics` | — | `RunMetrics` (from events + target audit) |
 | `GET /api/compare?protected=&baseline=` | operator | `RunComparison` |
 | `GET /api/runs/:id/export` | operator | `{ run, workflow, runtime, metrics, events }` (JSON download) |
+| `GET /api/runs/:id/tool-approvals` | — | `ToolApprovalView[]` (redacted) |
+| `GET /api/tool-approvals/:id` | operator (project owner) | exact target, arguments, digest, rule, inputs |
+| `POST /api/tool-approvals/:id/resolve` | operator, `ApproveToolCmd` | `{ status: "CONSUMED", outcome }` or `{ status: "REJECTED" }` |
 | `POST /api/runs/:id/incidents` | `OpenIncidentCmd` | `SecurityIncident` |
 | `POST /api/incidents/:id/quarantine` | `QuarantineCmd` | `{ ok, suggestedReplacementSourceVersionId }` |
 | `POST /api/incidents/:id/recovery-plan` | `RecoveryPlanCmd` | `RecoveryPlan` (+ `approval.requested` event) |
@@ -65,6 +68,16 @@ Connect with `io(API_URL, { auth: { token } })`. Unauthenticated sockets are rej
 `LOBBY` → host start (2–6 players; roles assigned privately) → `BRIEFING` (timed) → `ATTACK_WINDOW` (timed; attacker queues payloads) → `AGENT_EXECUTION` (a real run starts with the queued attacks) → `INVESTIGATION` (first incident) → `CONTAINMENT` (quarantine) → `RECOVERY` (approved rerun) → host reveal → `REVEAL`.
 
 Host **pause** freezes the round clock and rejects player actions; the agents keep running. **Reset** returns to `LOBBY` with the same players and a new `round`. Earlier runs stay in history. If a defender holding `QUARANTINE`/`APPROVE_RECOVERY` stays offline past `ARENA_RECONNECT_GRACE_SECONDS`, the card moves to a connected defender. Expired rooms are swept: their tokens stop working and their sockets are closed. Joins and actions are rate-limited (`429 RATE_LIMITED`).
+
+## Tool approvals (`REQUIRE_APPROVAL`)
+
+When a policy rule returns `REQUIRE_APPROVAL`, the agent's tool call **waits** while a `tool.approval_requested` event (with `tapr_` ID and redacted `resourcePreview`) goes out on the run stream.
+- **Review:** the project-owning operator opens `GET /api/tool-approvals/:id` to see the exact target, then resolves it with the shown `actionDigest`.
+- **Approve:** consumes the approval atomically (single use) and executes the call exactly once under the execution fence, after re-checking target, inputs, policy and workflow version. The agent receives the real result.
+- **Reject, expiry (`TOOL_APPROVAL_TTL_SECONDS`), or cancellation** (the execution stops, or an input becomes unusable): the call is never executed and the agent gets a denial.
+- **Restart:** every pending approval expires.
+
+Each transition emits `tool.approval_resolved`. Arena players never see or resolve tool approvals beyond the redacted preview on the run stream.
 
 ## Restarts
 

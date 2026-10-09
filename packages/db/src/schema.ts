@@ -36,6 +36,7 @@ export const arenaPhase = pgEnum("arena_phase", opts(C.ArenaPhase));
 export const arenaRole = pgEnum("arena_role", opts(C.ArenaRole));
 export const roomStatus = pgEnum("room_status", opts(C.RoomStatus));
 export const actionOutcome = pgEnum("action_outcome", opts(C.ActionOutcome));
+export const toolApprovalStatus = pgEnum("tool_approval_status", opts(C.ToolApprovalStatus));
 
 const ts = (name: string) => timestamp(name, { withTimezone: true, mode: "string" });
 
@@ -206,6 +207,30 @@ export const approvalRequests = pgTable("approval_requests", {
   expiresAt: ts("expires_at").notNull(),
   status: approvalStatus("status").notNull().default("PENDING"),
 });
+
+/**
+ * REQUIRE_APPROVAL tool calls. `record` is PRIVATE (raw arguments, exact target) and is only ever
+ * returned to the project-owning operator; events carry a redacted preview. Status changes are
+ * atomic compare-and-set updates (single use).
+ */
+export const toolApprovals = pgTable(
+  "tool_approvals",
+  {
+    id: text("id").primaryKey(),
+    runId: text("run_id").notNull().references(() => runs.id),
+    executionId: text("execution_id").notNull(),
+    toolRequestId: text("tool_request_id").notNull(),
+    status: toolApprovalStatus("status").notNull().default("PENDING"),
+    actionDigest: text("action_digest").notNull(),
+    expiresAt: ts("expires_at").notNull(),
+    record: jsonb("record").notNull(),
+    actorId: text("actor_id"),
+    reason: text("reason"),
+    createdAt: ts("created_at").notNull().defaultNow(),
+    resolvedAt: ts("resolved_at"),
+  },
+  (t) => [uniqueIndex("tool_approvals_request_uq").on(t.toolRequestId), index("tool_approvals_run_status_idx").on(t.runId, t.status)],
+);
 
 /** Append-only journal. seq is gap-free per run; assign inside the insert transaction. */
 export const events = pgTable(

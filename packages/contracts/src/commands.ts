@@ -66,6 +66,15 @@ export const ApproveRecoveryCmd = cmd({
 });
 export type ApproveRecoveryCmd = z.infer<typeof ApproveRecoveryCmd>;
 
+// POST /api/tool-approvals/:id/resolve — operator (project owner) only; identity from auth, never the body.
+export const ApproveToolCmd = cmd({
+  toolRequestId: Id.ToolRequestId,
+  /** Must equal the digest the approver was shown. */
+  actionDigest: z.string(),
+  decision: z.enum(["APPROVE", "REJECT"]),
+});
+export type ApproveToolCmd = z.infer<typeof ApproveToolCmd>;
+
 // POST /api/arena/rooms
 export const CreateRoomCmd = cmd({
   workflowId: Id.WorkflowId,

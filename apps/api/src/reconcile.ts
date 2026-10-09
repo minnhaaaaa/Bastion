@@ -1,6 +1,7 @@
 import { inArray } from "drizzle-orm";
 import { latestExecution, newId, type NewRunEvent, type Scheduler } from "@bastion/contracts";
 import { schema, type Db, type PgEventJournal } from "@bastion/db";
+import { PgToolApprovalStore } from "./toolApprovals";
 
 const REASON = "controller restarted";
 
@@ -10,7 +11,9 @@ const REASON = "controller restarted";
  * and runs that still have unresolved incidents are re-adopted so humans can contain/recover them.
  */
 export async function reconcileOnBoot(d: { db: Db; journal: PgEventJournal; scheduler?: Scheduler }) {
-  const report = { failedRuns: [] as string[], failedRecoveries: [] as string[], adopted: [] as string[] };
+  const report = { failedRuns: [] as string[], failedRecoveries: [] as string[], adopted: [] as string[], expiredToolApprovals: [] as string[] };
+  // Nothing can still be waiting on a tool approval after a restart.
+  report.expiredToolApprovals = await new PgToolApprovalStore(d.db, d.journal).expireAll(REASON);
   const rows = await d.db
     .select({ id: schema.runs.id })
     .from(schema.runs)

@@ -17,6 +17,7 @@ import {
   TaskState,
   ToolOutcome,
   ActionOutcome,
+  ToolApprovalStatus,
 } from "./enums";
 
 /** ISO-8601 timestamp string. All times are server clock. */
@@ -185,6 +186,24 @@ export const ApprovalRequest = z.object({
   status: ApprovalStatus,
 });
 export type ApprovalRequest = z.infer<typeof ApprovalRequest>;
+
+/** Public view of a tool approval. Never contains raw arguments or the exact target. */
+export const ToolApprovalView = z.object({
+  id: Id.ToolApprovalId,
+  runId: Id.RunId,
+  executionId: Id.ExecutionId,
+  toolRequestId: Id.ToolRequestId,
+  actionDigest: z.string(),
+  expiresAt: Timestamp,
+  status: ToolApprovalStatus,
+  operation: z.string(),
+  /** Redacted, e.g. origin + path without query, file path, or executable name. */
+  resourcePreview: Preview,
+  /** Human who resolved it; "system" for expiry/cancellation. */
+  actorId: z.string().nullable(),
+  reason: z.string().nullable(),
+});
+export type ToolApprovalView = z.infer<typeof ToolApprovalView>;
 
 export const ArenaRoom = z.object({
   id: Id.RoomId,
