@@ -1,31 +1,51 @@
-import { useQuery } from "@tanstack/react-query";
-import { env } from "./env";
-
-// Placeholder (Member 1 replaces this). Everything shown comes live from the API — no bundled data.
-export function App() {
-  const health = useQuery({
-    queryKey: ["health"],
-    queryFn: async () => {
-      const res = await fetch(`${env.apiUrl}/health`);
-      if (!res.ok) throw new Error(`API ${res.status}`);
-      return (await res.json()) as { ok: boolean; startedAt: string; now: string };
-    },
-    refetchInterval: 5000,
-  });
-
+import { Landing } from "./pages/Landing";
+import { lazy, Suspense } from "react";
+const Architecture = lazy(() =>
+  import("./pages/Architecture").then((m) => ({ default: m.Architecture })),
+);
+const Console = lazy(() =>
+  import("./pages/Console").then((m) => ({ default: m.Console })),
+);
+const Arena = lazy(() =>
+  import("./pages/Arena").then((m) => ({ default: m.Arena })),
+);
+import { SessionProvider } from "./lib/session";
+import { Footer, Header } from "./components/ui";
+export function App({ path }: { path: string }) {
+  const content =
+    path === "/" ? (
+      <Landing />
+    ) : path === "/architecture" ? (
+      <Architecture />
+    ) : path === "/dashboard" || path.startsWith("/runs/") ? (
+      <Console
+        runId={path.startsWith("/runs/") ? path.split("/")[2] : undefined}
+      />
+    ) : path === "/arena" || path.startsWith("/arena/") ? (
+      <Arena roomId={path.split("/")[2]} />
+    ) : (
+      <>
+        <Header />
+        <main id="main" className="container architecture">
+          <h1>Page not found.</h1>
+          <a className="button" href="/">
+            Back to Bastion
+          </a>
+        </main>
+        <Footer />
+      </>
+    );
   return (
-    <main className="min-h-screen bg-neutral-950 p-8 text-neutral-100">
-      <h1 className="text-3xl font-bold">Bastion</h1>
-      <dl className="mt-6 grid max-w-md grid-cols-2 gap-2 text-sm">
-        <dt className="text-neutral-400">API</dt>
-        <dd>{health.isPending ? "connecting…" : health.isError ? `unreachable (${health.error.message})` : "connected"}</dd>
-        {health.data && (
-          <>
-            <dt className="text-neutral-400">Server time</dt>
-            <dd>{health.data.now}</dd>
-          </>
-        )}
-      </dl>
-    </main>
+    <SessionProvider>
+      <Suspense
+        fallback={
+          <main id="main" tabIndex={-1} className="page-loading" role="status">
+            Opening Bastion…
+          </main>
+        }
+      >
+        {content}
+      </Suspense>
+    </SessionProvider>
   );
 }

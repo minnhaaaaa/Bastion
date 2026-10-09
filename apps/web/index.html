@@ -3,10 +3,28 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Bastion</title>
+    <meta name="theme-color" content="#000000" />
+    <meta
+      name="description"
+      content="Bastion is an agent workspace with security built in. Trace threats, contain unsafe actions, and recover affected work."
+    />
+    <title>Bastion — Stop the breach. Save the workflow.</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap"
+      rel="stylesheet"
+    />
   </head>
   <body>
-    <div id="root"></div>
+    <a href="#main" class="skip-link">Skip to content</a>
+    <div id="transition-loader" aria-hidden="true"></div>
+    <div data-barba="wrapper">
+      <div data-barba="container" data-barba-namespace="bastion">
+        <div class="app-mount"></div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

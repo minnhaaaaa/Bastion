@@ -5,5 +5,7 @@ function required(name: string, value: string | undefined): string {
 }
 
 export const env = {
-  apiUrl: required("VITE_API_URL", import.meta.env.VITE_API_URL),
+  get apiUrl() {
+    return required("VITE_API_URL", import.meta.env.VITE_API_URL);
+  },
 };
