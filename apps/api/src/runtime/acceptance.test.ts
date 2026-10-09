@@ -7,6 +7,7 @@ import { PgEventJournal, RunRepository } from "@bastion/db";
 import { createTestDb, seedRun, setTaskState } from "@bastion/db/testing";
 import { FsBlobStore, PgArtifactBroker } from "@bastion/provenance";
 import { acceptanceChecks } from "./verification";
+import { computeMetrics } from "../metrics";
 
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => {
@@ -34,6 +35,21 @@ async function setup(output: string) {
 }
 
 describe("workflow-declared acceptance checks", () => {
+  it("does not report legitimate completion when executed tasks fail verification", async () => {
+    const t = await setup(JSON.stringify({ cite: "$QUOTE" }));
+    const snapshot = (await t.journal.snapshot(t.runId))!;
+    snapshot.run.status = "FAILED";
+    snapshot.verification = [{ name: "acceptance.source_quote:test", passed: false }];
+    expect((await computeMetrics(snapshot, [])).legitimateCompletion).toBe(false);
+    snapshot.run.status = "COMPLETED";
+    expect((await computeMetrics(snapshot, [])).legitimateCompletion).toBe(false);
+    snapshot.verification = [];
+    expect((await computeMetrics(snapshot, [])).legitimateCompletion).toBe(false);
+    snapshot.verification = [{ name: "acceptance.source_quote:test", passed: true }];
+    expect((await computeMetrics(snapshot, [])).legitimateCompletion).toBe(true);
+    snapshot.run.status = "RECOVERED";
+    expect((await computeMetrics(snapshot, [])).legitimateCompletion).toBe(true);
+  });
   it("SOURCE_QUOTE passes for quotes found in observed trusted sources and flags unsupported ones", async () => {
     const t = await setup(JSON.stringify({ cite: "$QUOTE", made_up: "this text appears in no source at all" }));
     const ok = await t.run([{ kind: "SOURCE_QUOTE", id: "c1", taskId: t.taskId, pointers: ["/cite"], sourceNames: ["manual"] }]);

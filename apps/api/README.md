@@ -110,6 +110,8 @@ For **Claude API**, set `PI_PROVIDER=anthropic`, `PI_AUTH_MODE=api-key`, `PI_BAS
 
 For **OpenRouter**, set `PI_PROVIDER=openrouter`, `PI_AUTH_MODE=api-key`, `PI_BASE_URL=https://openrouter.ai/api/v1` and your OpenRouter key in `PI_API_KEY`. `openrouter/free` is available in the installed registry; availability and rate limits are controlled by OpenRouter.
 
+For a model absent from the installed registry, configure its provider, exact model ID, base URL and API key explicitly, and set `PI_CUSTOM_MODEL_JSON`. This metadata object requires `api` (`openai-completions`), `reasoning` (boolean), `input` (an array of `text` and/or `image`), positive integer `contextWindow` and `maxTokens`, and `cost` with nonnegative `input`, `output`, `cacheRead` and `cacheWrite` prices per million tokens. Obtain these values from the provider. Extra fields, credential resolvers and OAuth mode are rejected. This registers only the chosen model; it does not configure a fallback. `pnpm agent:models` lists the installed registry, so consult the provider directly for custom model IDs.
+
 All providers also require explicit `PI_AGENT_DIR`, positive `PI_TIMEOUT_MS`, and the sandbox/scheduler settings in `.env.example` when `AGENT_RUNTIME=enabled`. `PI_AGENT_DIR` is Pi's local working configuration directory, while `PI_AUTH_FILE` is the OAuth credential file. Never use a `VITE_` variable for model credentials.
 
 Run `pnpm config:check` before starting services, or `pnpm config:check --runtime` to check agent requirements even when the runtime is disabled. It reports missing/invalid configuration by field name without printing secrets. It validates the configured model and local OAuth credential structure, but does not contact databases, refresh OAuth tokens, or test model access. Restart the API after changing provider configuration.
@@ -129,6 +131,8 @@ The planner has no tools. Fresh plans without a project repository are constrain
 `BASTION_DEPLOYED_RUNTIME_TEST=enabled BASTION_DEPLOYED_REPORT=<private absolute path> pnpm exec vitest run tests/deployed-runtime.test.ts` checks the configured running controller, saves a generated test project/workflow through the API, runs the real model, verifies the stored result, and waits for Neo4j to project the completed events. It leaves that test project as persisted evidence. Required service locations, credentials, model timeout and blob storage come from `.env`; no alternate service is silently substituted. Provider quota/authentication failures stop planning before a run is started.
 
 The optional `BASTION_PROVIDER_DIAGNOSTIC=enabled pnpm exec vitest run packages/runtime-pi/src/provider-connectivity.test.ts` makes one real no-tool provider request and reports a credential-redacted error when it fails. Normal tests skip both live checks. The runtime exposes only safe failure categories publicly; provider usage limits are distinguished from invalid model plans.
+
+For an explicitly configured custom OpenAI-compatible provider, `BASTION_PROVIDER_HTTP_DIAGNOSTIC=enabled` runs a separate bounded non-streaming probe in that file, reporting only HTTP status and whether a completion exists. This helps distinguish provider rejection from a stalled SDK stream. Do not enable both diagnostics unless both model requests are intended. Normal tests skip them. Runtime tasks enforce their deadline independently of provider cancellation; timed-out plans do not start a run.
 
 
 ### Project repository access and follow-ups

@@ -2,7 +2,7 @@ import { expect, it, vi } from "vitest";
 import { Type } from "@sinclair/typebox";
 import { AuthStorage, DefaultResourceLoader, ModelRegistry, SessionManager, SettingsManager, createAgentSession } from "@mariozechner/pi-coding-agent";
 import { newId } from "@bastion/contracts";
-import { gatewayTools, piConfigFromEnv } from "./index";
+import { gatewayTools, piConfigFromEnv, PiRuntimeAdapter } from "./index";
 
 it("real installed Pi registers only gateway-backed file/http/exec tools", async () => {
   const dispatch = vi.fn(async () => ({ status: "DENIED" as const, toolRequestId: newId("tool"), ruleId: "default.deny", reason: "Generated test denial" }));
@@ -28,4 +28,21 @@ it("real installed Pi registers only gateway-backed file/http/exec tools", async
 it("requires explicit provider/model/key/path/timeout configuration", () => {
   expect(() => piConfigFromEnv({})).toThrow();
   expect(() => piConfigFromEnv({ PI_PROVIDER: crypto.randomUUID(), PI_MODEL: crypto.randomUUID(), PI_API_KEY: crypto.randomUUID(), PI_AGENT_DIR: process.cwd(), PI_TIMEOUT_MS: "0" })).toThrow();
+});
+
+it("fails a task on its deadline even when the SDK ignores abort", async () => {
+  const model = ModelRegistry.create(AuthStorage.inMemory(), "").getAll()[0]!;
+  const adapter = new PiRuntimeAdapter({
+    config: { authMode: "api-key", provider: model.provider, model: model.id, baseUrl: model.baseUrl, apiKey: crypto.randomUUID(), agentDir: process.cwd(), timeoutMs: 20 },
+    tools: [], gateway: { dispatch: async () => { throw new Error("No tools expected"); } },
+    taskContext: async () => ({ executionId: newId("exec"), traceId: newId("trace"), cwd: process.cwd(), prompt: crypto.randomUUID(), outputName: crypto.randomUUID() }),
+  });
+  const { sessionId } = await adapter.startTask({ runId: newId("run"), taskId: newId("task"), agentId: newId("agent"), inputArtifactIds: [], capabilities: [], workspaceId: process.cwd() });
+  const live = (adapter as unknown as { sessions: Map<string, { session: Awaited<ReturnType<typeof createAgentSession>>["session"] }> }).sessions.get(sessionId)!;
+  vi.spyOn(live.session, "prompt").mockImplementation(() => new Promise(() => {}));
+  const abort = vi.spyOn(live.session, "abort").mockImplementation(() => new Promise(() => {}));
+  const events: unknown[] = [];
+  await new Promise<void>(resolve => adapter.subscribe(sessionId, event => { events.push(event); if (event.kind === "finished") resolve(); }));
+  expect(events).toEqual([{ kind: "finished", ok: false, error: "TIMEOUT" }]);
+  expect(abort).toHaveBeenCalled();
 });

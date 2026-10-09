@@ -77,14 +77,14 @@ it("concurrent requests cannot borrow another operator's in-flight plan", async 
     expect((await first).statusCode).toBe(200);
   } finally { release(); await test.close(); }
 });
-it("quota failures reach the caller as actionable messages rather than invalid-plan errors", async () => {
+it.each([["PROVIDER_RATE_LIMITED", "provider has reached its usage limit"], ["TIMEOUT", "provider did not respond before the deadline"]])("provider failure %s reaches the caller with an actionable message", async (code, message) => {
   const { PiRuntimeAdapter } = await import("@bastion/runtime-pi");
   const { createTaskPlanner } = await import("./task-planning");
   const start = vi.spyOn(PiRuntimeAdapter.prototype, "startTask").mockResolvedValue({ sessionId: crypto.randomUUID() });
-  const subscribe = vi.spyOn(PiRuntimeAdapter.prototype, "subscribe").mockImplementation((_id, sink) => { queueMicrotask(() => sink({ kind: "finished", ok: false, error: "PROVIDER_RATE_LIMITED" })); return () => {}; });
+  const subscribe = vi.spyOn(PiRuntimeAdapter.prototype, "subscribe").mockImplementation((_id, sink) => { queueMicrotask(() => sink({ kind: "finished", ok: false, error: code })); return () => {}; });
   try {
     const planner = createTaskPlanner({ authMode: "api-key", apiKey: crypto.randomUUID(), provider: crypto.randomUUID(), model: crypto.randomUUID(), baseUrl: "https://test.invalid", agentDir: process.cwd(), timeoutMs: 1000 }, process.cwd());
-    await expect(planner(crypto.randomUUID())).rejects.toThrow("provider has reached its usage limit");
+    await expect(planner(crypto.randomUUID())).rejects.toThrow(message);
   } finally { start.mockRestore(); subscribe.mockRestore(); }
 });
 

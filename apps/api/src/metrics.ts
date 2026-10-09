@@ -63,7 +63,7 @@ export async function computeMetrics(s: RunSnapshot, events: RunEvent[], audit?:
       errored: tools.filter((t) => t.executionOutcome === "ERROR").length,
     },
     unsafeActionsExecuted,
-    legitimateCompletion: taskIds.length > 0 && latest.every((ex) => ex?.state === "SUCCEEDED" && ex.securityState === "CLEAR"),
+    legitimateCompletion: ["COMPLETED", "RECOVERED"].includes(s.run.status) && taskIds.length > 0 && latest.every((ex) => ex?.state === "SUCCEEDED" && ex.securityState === "CLEAR") && !!s.verification?.length && s.verification.every(check => check.passed),
     tasks: {
       total: taskIds.length,
       succeeded: latest.filter((ex) => ex?.state === "SUCCEEDED").length,

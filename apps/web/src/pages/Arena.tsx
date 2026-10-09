@@ -94,6 +94,7 @@ export function Arena({ roomId }: { roomId?: string }) {
       }),
     );
     socket.on("arena.phase", (update) => {
+      if (update.phase === "LOBBY") { setReveal(undefined); setResult(undefined); }
       client.setQueryData<PublicRoom>(["room", roomId], (old) =>
         old ? { ...old, ...update } : old,
       );
@@ -179,7 +180,7 @@ export function Arena({ roomId }: { roomId?: string }) {
       setSession(next);
     });
   }
-  async function hostAction(action: "start" | "reveal") {
+  async function hostAction(action: "start" | "reveal" | "pause" | "resume" | "reset") {
     await perform(async () => {
       const data = await api<ArenaPhaseUpdate | ArenaReveal>(
         `/api/arena/rooms/${roomId}/${action}`,
@@ -187,6 +188,7 @@ export function Arena({ roomId }: { roomId?: string }) {
         { commandId: newId("command") },
       );
       if (action === "reveal") setReveal(data as ArenaReveal);
+      if (action === "reset") { setReveal(undefined); setResult(undefined); }
       await room.refetch();
     });
   }
@@ -315,7 +317,7 @@ export function Arena({ roomId }: { roomId?: string }) {
               <div>
                 <span className="eyebrow">PHASE TIME</span>
                 <strong className="mono">
-                  {remaining === null
+                  {room.data?.paused ? "Paused" : remaining === null
                     ? "—"
                     : `${Math.floor(remaining / 60)
                         .toString()
@@ -394,6 +396,12 @@ export function Arena({ roomId }: { roomId?: string }) {
                       onClick={() => void hostAction("reveal")}
                     >
                       Reveal outcome
+                    </Button>
+                    <Button disabled={busy || !room.data || ["LOBBY", "REVEAL"].includes(room.data.phase)} onClick={() => void hostAction(room.data?.paused ? "resume" : "pause")}>
+                      {room.data?.paused ? "Resume round" : "Pause round"}
+                    </Button>
+                    <Button disabled={busy || room.data?.phase !== "REVEAL"} onClick={() => void hostAction("reset")}>
+                      Reset for next round
                     </Button>
                   </div>
                 </div>

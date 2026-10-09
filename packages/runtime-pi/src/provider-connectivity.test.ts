@@ -3,6 +3,21 @@ import { resolve } from "node:path";
 import { DefaultResourceLoader, SessionManager, SettingsManager, createAgentSession } from "@mariozechner/pi-coding-agent";
 import { piConfigFromEnv, piModelRegistry } from "./index";
 
+it.skipIf(process.env.BASTION_PROVIDER_HTTP_DIAGNOSTIC !== "enabled")("custom provider answers a bounded non-streaming HTTP probe", async () => {
+  process.loadEnvFile(resolve(".env"));
+  const config = piConfigFromEnv();
+  if (config.authMode !== "api-key" || config.customModel?.api !== "openai-completions") throw new Error("Probe requires an explicitly configured compatible custom API-key provider");
+  const response = await fetch(`${config.baseUrl.replace(/\/$/, "")}/chat/completions`, {
+    method: "POST", headers: { Authorization: `Bearer ${config.apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ model: config.model, messages: [{ role: "user", content: `Reply with this identifier only: ${crypto.randomUUID()}` }], max_tokens: 256, stream: false }),
+    signal: AbortSignal.timeout(20000),
+  });
+  const body = await response.json();
+  console.log({ httpStatus: response.status, hasCompletion: !!body.choices?.[0]?.message?.content });
+  expect(response.ok).toBe(true);
+  expect(body.choices?.[0]?.message?.content).toBeTruthy();
+}, 25000);
+
 it.skipIf(process.env.BASTION_PROVIDER_DIAGNOSTIC !== "enabled")("configured provider completes a real no-tool request", async () => {
   process.loadEnvFile(resolve(".env"));
   const config = piConfigFromEnv();

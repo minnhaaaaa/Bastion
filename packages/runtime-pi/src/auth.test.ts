@@ -49,3 +49,18 @@ it("missing model fails during setup before any workflow executes", () => {
   const config = piConfigFromEnv({ ...connection(), PI_MODEL: crypto.randomUUID(), PI_AUTH_MODE: "api-key", PI_API_KEY: crypto.randomUUID() });
   expect(() => piModelRegistry(config)).toThrow("Configured Pi model does not exist");
 });
+
+it("registers only explicitly configured custom model metadata and keeps credentials out of it", async () => {
+  const provider = `provider-${crypto.randomUUID()}`, model = crypto.randomUUID(), key = crypto.randomUUID();
+  const metadata = { api: "openai-completions", reasoning: false, input: ["text"], contextWindow: 4096, maxTokens: 512, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } };
+  const env = { ...connection(), PI_PROVIDER: provider, PI_MODEL: model, PI_AUTH_MODE: "api-key", PI_API_KEY: key, PI_CUSTOM_MODEL_JSON: JSON.stringify(metadata) };
+  const config = piConfigFromEnv(env);
+  const registered = piModelRegistry(config);
+  expect(registered.model).toMatchObject({ ...metadata, id: model, provider, baseUrl: env.PI_BASE_URL });
+  expect(await registered.authStorage.getApiKey(provider)).toBe(key);
+  expect(JSON.stringify(registered.model)).not.toContain(key);
+  for (const bad of [{ ...metadata, baseUrl: "https://example.invalid" }, { ...metadata, contextWindow: 0 }, { ...metadata, cost: {} }, { ...metadata, apiKey: "!command" }]) {
+    expect(() => piConfigFromEnv({ ...env, PI_CUSTOM_MODEL_JSON: JSON.stringify(bad) })).toThrow("Invalid PI_CUSTOM_MODEL_JSON");
+  }
+  expect(() => piConfigFromEnv({ ...env, PI_PROVIDER: "openai-codex", PI_AUTH_MODE: "oauth" })).toThrow("requires api-key mode");
+});
