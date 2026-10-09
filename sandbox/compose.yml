@@ -1,0 +1,32 @@
+services:
+  worker:
+    build:
+      context: ..
+      dockerfile: sandbox/Dockerfile
+      args:
+        SANDBOX_NODE_IMAGE: ${SANDBOX_NODE_IMAGE:?required}
+    environment:
+      SANDBOX_ROOT: ${SANDBOX_ROOT:?required}
+      SANDBOX_AUDIT_PATH: ${SANDBOX_AUDIT_PATH:?required}
+      SANDBOX_TOKEN: ${SANDBOX_TOKEN:?required}
+      SANDBOX_HTTP_ORIGINS: ${SANDBOX_HTTP_ORIGINS:?required}
+      SANDBOX_EXEC_COMMANDS: ${SANDBOX_EXEC_COMMANDS:?required}
+      SANDBOX_TIMEOUT_MS: ${SANDBOX_TIMEOUT_MS:?required}
+      SANDBOX_MAX_BYTES: ${SANDBOX_MAX_BYTES:?required}
+      SANDBOX_PORT: ${SANDBOX_PORT:?required}
+      SANDBOX_BIND_HOST: ${SANDBOX_BIND_HOST:?required}
+    ports:
+      - "${SANDBOX_PUBLISH_HOST:?required}:${SANDBOX_PUBLISH_PORT:?required}:${SANDBOX_PORT:?required}"
+    volumes:
+      - "${SANDBOX_WORKSPACE_PATH:?required}:${SANDBOX_ROOT:?required}"
+      - "${SANDBOX_AUDIT_DIRECTORY:?required}:${SANDBOX_AUDIT_MOUNT:?required}"
+    networks: [isolated]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: ${SANDBOX_PIDS_LIMIT:?required}
+    mem_limit: ${SANDBOX_MEMORY_LIMIT:?required}
+    cpus: ${SANDBOX_CPUS:?required}
+networks:
+  isolated:
+    internal: true

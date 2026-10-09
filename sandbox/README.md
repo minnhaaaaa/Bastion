@@ -1,0 +1,30 @@
+# Person 2 runtime and sandbox handoff
+
+The runtime, scheduler, gateway and workflow runner implement the frozen interfaces in `packages/contracts`. They use the journal and artifact broker supplied by Person 3. No workflow definitions or attack content are shipped with these modules.
+
+## Pi spike
+
+The lockfile pins the requested `@mariozechner/pi-coding-agent` package to 0.73.1. The package is marked deprecated upstream; moving to its successor needs a deliberate dependency change. Its installed declarations and executable SDK were used to verify this implementation. In this version, `createAgentSession.tools` is a **string allowlist**, and custom-tool `execute` receives `(toolCallId, params, signal, onUpdate, context)`.
+
+The adapter enables only gateway-backed custom tools. It disables extensions, skills, prompt templates, context-file discovery, models.json command resolvers, and install telemetry. Session/auth/settings storage is in memory. The tests instantiate a real Pi session and invoke its registered file/HTTP/process tools, including replacements named `read` and `bash`, proving each reaches the gateway. No provider call is needed for these tests. A live model-driven run still needs configured provider credentials and Person 3's real journal/broker.
+
+## Application wiring
+
+1. Fill the required Person 2 variables in `.env.example`. Use `piConfigFromEnv`, `sandboxConfigFromEnv` and `schedulerParallelismFromEnv` at startup. Tool descriptions and JSON schemas supplied to Pi are tool implementation metadata; agent capabilities and policy rules must come from the pinned workflow. `SANDBOX_TOOL_OPERATIONS` maps the registered tool names to implemented operations; do not accept an agent-provided operation.
+2. Construct `SandboxClient`. Pass its `normalize` and `execute` methods to `PolicyToolGateway`, binding them to the client instance.
+3. Supply the gateway's `context(call)` from authoritative execution records. Validate run/task/agent/execution ownership, derive consumed input IDs and classification, check that the execution is active, and load its immutable run mode and pinned policy. Create `WorkflowPolicyEngine` from that definition.
+4. Use one `ExecutionFence` shared by the scheduler, gateway and containment service. In a multi-process deployment, substitute a shared Postgres lock/transaction mechanism. Quarantine mutations must take this same fence **before** changing input trust; dispatch holds it from authorization through the side effect. `isUsable` checks alone cannot close a concurrent quarantine race.
+5. Construct `WorkflowScheduler` with the real journal, broker and a pinned-definition loader. Its runtime callback can call `piRuntimeForExecution` with the scheduler's context, the configured working directory, Pi settings and gateway. Sources and upstream artifacts are consumed before runtime creation. Pi output is published only after a second usability check.
+6. Construct `WorkflowRunner` with the run/workflow repositories, an authorized sandbox source loader, the scheduler and trusted verifier callbacks. Its scheduler selector receives the persisted run mode. Baseline gateway contexts explicitly record `baseline.unprotected`; protected mode requires both capability and a workflow policy grant. Neither mode bypasses execution holds or unusable-input checks. A missing historical workflow version fails rather than substituting a newer definition.
+
+Tool approval rules are recorded as `REQUIRE_APPROVAL` and do not execute. The frozen contracts provide recovery approvals, but no digest-bound tool-approval command/service; this implementation returns a denied tool result until a separately authorized tool-approval path exists. Resource values and raw arguments are never broadcast: journal entries carry resource/argument hashes and URL origins, while the private worker access audit records the actual target.
+
+## Container worker
+
+Start with `docker compose --env-file .env -f sandbox/compose.yml up --build`. Choose an explicit Node image and create the workspace/audit directories with permissions for its non-root `node` user. `SANDBOX_ROOT` and `SANDBOX_AUDIT_PATH` are container paths; the workspace mount is mirrored locally at `SANDBOX_WORKSPACE_PATH` for canonical path normalization. Keep audit files in a separate mount. Register operations using `path`, `content`, `url`, or `executable`/`argv` as appropriate.
+
+The container has an internal network with no external egress, a read-only root filesystem, dropped capabilities, no privilege escalation, and required resource limits. Bind its authenticated dispatch port to a private interface accessible only to the controller. The token belongs only to the controller and worker; never give it or provider credentials to tool subprocesses. Process execution uses an exact configured executable allowlist, an empty environment, and no shell. Allowlisting an interpreter or unrestricted executable grants broad power inside the worker; use narrowly scoped executables and one workspace/worker per isolation boundary. File operations reject traversal and symlinks escaping the workspace. HTTP operations accept only configured origins, refuse credentials and redirects, and bound response size/time. Internal target services can join this internal network explicitly; no target content is embedded in code.
+
+The worker's append-only-in-normal-operation audit is independent of the journal. The integration test starts a real worker process, attempts a protected Pi gateway call, asserts zero target reads, and then performs a baseline read to prove the audit records actual access. This host-process test does not prove Docker network isolation; container egress and provider-driven execution must also be checked with the configured deployment. Preserve audit storage outside agent-writable directories and use a separate audit collector when granting powerful process tools.
+
+Recovery tests exercise holds, fresh execution IDs, incremented attempts, replacement sources, and an unchanged independent branch. Full Postgres/Neo4j containment and arena tests require Person 3's services.

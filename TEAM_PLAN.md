@@ -80,12 +80,14 @@ Member 1 builds against the **real API from day one**:
 
 Owns: `runtime-adapter`, `runtime-pi`, `security`, `orchestrator`, `scenario-kit`, `sandbox/`.
 
-- [ ] **Pi spike first (M0):** confirm real `@mariozechner/pi-coding-agent` API; prove file/http/exec tools can be replaced or wrapped so every call hits `ToolGateway.dispatch`. Report back early if not.
-- [ ] `security`: `PolicyEngine` evaluating the **workflow's** `policyRules` + agent capabilities (glob match, rule IDs, `default.deny`); `ToolGateway` (normalize → `tool.requested` → evaluate → `tool.decided` → re-check inputs `isUsable` right before execution → `tool.executed`; any error = deny + `policy.unavailable`). Unit tests with generated rules.
+- [x] **Pi spike first (M0):** confirm real `@mariozechner/pi-coding-agent` API; prove file/http/exec tools can be replaced or wrapped so every call hits `ToolGateway.dispatch`. Report back early if not.
+- [x] `security`: `PolicyEngine` evaluating the **workflow's** `policyRules` + agent capabilities (glob match, rule IDs, `default.deny`); `ToolGateway` (normalize → `tool.requested` → evaluate → `tool.decided` → re-check inputs `isUsable` right before execution → `tool.executed`; any error = deny + `policy.unavailable`). Unit tests with generated rules.
 - [ ] `sandbox/`: Docker worker, deny-by-default egress; hosts/paths come from config; target services record a **real access audit log** (acceptance #1).
-- [ ] `orchestrator`: `Scheduler` builds `TaskSpec`s from the run's workflow definition; ready when deps' artifacts are usable; bounded parallelism; `hold`; `rerun` with fresh executionIds/attempt+1; emits `run.planned`, `task.state_changed`, `agent.session_*`.
-- [ ] `runtime-adapter`: interface + test-only fake (lives in test files).
-- [ ] `scenario-kit`: workflow runner — loads sources from their `location`, applies attack payloads by `attackPayloadId`, baseline/protected modes, verifier checks. Contains no workflow data.
+- [x] `orchestrator`: `Scheduler` builds `TaskSpec`s from the run's workflow definition; ready when deps' artifacts are usable; bounded parallelism; `hold`; `rerun` with fresh executionIds/attempt+1; emits `run.planned`, `task.state_changed`, `agent.session_*`.
+- [x] `runtime-adapter`: interface + test-only fake (lives in test files).
+- [x] `scenario-kit`: workflow runner — loads sources from their `location`, applies attack payloads by `attackPayloadId`, baseline/protected modes, verifier checks. Contains no workflow data.
+
+Implementation and integration instructions: `sandbox/README.md`. The Docker worker and compose configuration are implemented; a real host-worker test verifies zero audited reads for a protected denial and an actual baseline read. Container egress checks remain pending because the Docker daemon was unavailable during implementation. A provider-driven run requires configured credentials and Member 3's real journal/broker. Tool approval policies stay blocked until an authorized tool-approval service exists; the frozen contracts were not changed.
 
 ## Member 3 — Data, provenance, recovery, API
 
