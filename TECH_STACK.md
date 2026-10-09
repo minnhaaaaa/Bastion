@@ -1,4 +1,4 @@
-# SPLITBRAIN — Finalized Technology Stack
+# Bastion — Finalized Technology Stack
 
 **Date:** 9 October 2026 · **Track:** Safe & Trustworthy AI  
 **Architecture:** React/Vite SPA + TypeScript API + security-native task orchestration + Pi-backed isolated workers.
@@ -45,7 +45,7 @@ Use the SPA host's fallback rewrite to `index.html` for client routes.
 ## 3. Final monorepo layout
 
 ```text
-splitbrain/
+bastion/
 ├── apps/
 │   ├── web/                    # React + Vite SPA, all web surfaces
 │   │   └── src/

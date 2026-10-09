@@ -1,4 +1,4 @@
-# SPLITBRAIN — System Architecture
+# Bastion — System Architecture
 
 **Status:** Finalized MVP design baseline · **Date:** 9 October 2026  
 **Frontend:** React + TypeScript + Vite  
@@ -26,7 +26,7 @@ Build a **security-native orchestrator** that uses existing agent harnesses for 
                       └──────┬──────────┬─────────┘
                              │          │
             ┌────────────────▼─┐   ┌────▼───────────────┐
-            │ SPLITBRAIN Core  │   │ PostgreSQL         │
+            │ Bastion Core     │   │ PostgreSQL         │
             │ task scheduler   │   │ event journal      │
             │ artifact broker  │◄─►│ policies / state   │
             │ incident manager │   │ DAG / artifacts    │

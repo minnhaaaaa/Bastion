@@ -1,4 +1,4 @@
-# SPLITBRAIN — Finalized Project Plan
+# Bastion — Finalized Project Plan
 
 **Track:** Safe & Trustworthy AI  
 **Status:** Architecture baseline / hackathon MVP  
@@ -8,15 +8,15 @@
 
 ## 1. Product overview
 
-SPLITBRAIN is a small multi-agent orchestration system that **reuses Pi as the agent execution harness**, while implementing security at the coordination and tool-execution boundaries. It is **not** a new LLM, a Pi replacement, a T3 Code clone, or a universal MCP firewall.
+Bastion is a small multi-agent orchestration system that **reuses Pi as the agent execution harness**, while implementing security at the coordination and tool-execution boundaries. It is **not** a new LLM, a Pi replacement, a T3 Code clone, or a universal MCP firewall.
 
 It has three connected experiences built on **one runtime**:
 
-1. **SPLITBRAIN Core (real product):** Run collaborating agents with task dependencies, agent-scoped capabilities, mediated artifact exchange, pre-execution tool authorization, a provenance knowledge graph, incident containment, and task-level selective recovery.
+1. **Bastion Core (real product):** Run collaborating agents with task dependencies, agent-scoped capabilities, mediated artifact exchange, pre-execution tool authorization, a provenance knowledge graph, incident containment, and task-level selective recovery.
 2. **Developer Console (real product UI):** Observe the running agent graph, inspect security decisions and incidents, review pending approvals, and authorize recovery.
 3. **Arena (landing-page live demo):** Visitors join from phones via QR codes to attack or defend a *sandboxed instance of the same runtime*. Actions update a shared, projected security graph in real time.
 
-**Primary success claim:** For the supported workflow and threat model, SPLITBRAIN denies prohibited actions at execution boundaries and identifies/recomputes recorded downstream dependencies after a source is quarantined. It does **not** promise to eliminate every hallucination, jailbreak, or prompt injection.
+**Primary success claim:** For the supported workflow and threat model, Bastion denies prohibited actions at execution boundaries and identifies/recomputes recorded downstream dependencies after a source is quarantined. It does **not** promise to eliminate every hallucination, jailbreak, or prompt injection.
 
 ## 2. Problem and solution
 
@@ -30,7 +30,7 @@ It has three connected experiences built on **one runtime**:
 
 ## 3. Audience and positioning
 
-- **Developer:** Defines a workflow in a TypeScript SDK/CLI; runs Pi-backed agents through SPLITBRAIN; uses a React console for monitoring and incident response.
+- **Developer:** Defines a workflow in a TypeScript SDK/CLI; runs Pi-backed agents through Bastion; uses a React console for monitoring and incident response.
 - **Security engineer:** Defines policies, examines why an action was allowed or denied, traces evidence, and reviews recoveries.
 - **Demo visitor/judge:** Joins an arena room without installing software and experiences a real, isolated agent workflow under attack.
 
@@ -82,7 +82,7 @@ Buttons: **Try Live Arena** and **Launch Developer Console**. Below: an event-dr
 
 1. Developer defines agents, trusted sources, capabilities and task graph in a configuration/SDK.
 2. Local runner starts Pi-backed agent sessions inside an isolated demo execution environment.
-3. All inter-agent artifacts and mediated tool calls pass through SPLITBRAIN control points.
+3. All inter-agent artifacts and mediated tool calls pass through Bastion control points.
 4. Developer opens the React console to inspect graphs, policies and security events.
 5. On a flagged incident, the system blocks hard-policy violations automatically; quarantine and recovery require permission/approval according to policy.
 
