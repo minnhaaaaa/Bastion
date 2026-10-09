@@ -39,6 +39,7 @@ CREATE TABLE "arena_actions" (
 	"command_id" text NOT NULL,
 	"type" text NOT NULL,
 	"outcome" "action_outcome" NOT NULL,
+	"message" text DEFAULT '' NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
@@ -49,7 +50,11 @@ CREATE TABLE "arena_players" (
 	"token_hash" text NOT NULL,
 	"role" "arena_role" NOT NULL,
 	"display_alias" text NOT NULL,
-	"connected" boolean DEFAULT true NOT NULL
+	"connected" boolean DEFAULT false NOT NULL,
+	"cards" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"used_cards" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"evidence" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"joined_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "arena_rooms" (
@@ -57,8 +62,12 @@ CREATE TABLE "arena_rooms" (
 	"workflow_id" text NOT NULL,
 	"run_id" text,
 	"join_code_hash" text NOT NULL,
+	"host_token_hash" text NOT NULL,
 	"status" "room_status" DEFAULT 'OPEN' NOT NULL,
 	"phase" "arena_phase" DEFAULT 'LOBBY' NOT NULL,
+	"phase_started_at" timestamp with time zone NOT NULL,
+	"phase_ends_at" timestamp with time zone,
+	"pending_attack_payload_ids" jsonb DEFAULT '[]'::jsonb NOT NULL,
 	"host_id" text NOT NULL,
 	"expires_at" timestamp with time zone NOT NULL
 );
@@ -113,7 +122,8 @@ CREATE TABLE "projects" (
 	"id" text PRIMARY KEY NOT NULL,
 	"owner_id" text NOT NULL,
 	"name" text NOT NULL,
-	"policy_set_id" text NOT NULL
+	"policy_set_id" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "recovery_plans" (
@@ -200,11 +210,12 @@ CREATE TABLE "tool_requests" (
 );
 --> statement-breakpoint
 CREATE TABLE "workflows" (
-	"id" text PRIMARY KEY NOT NULL,
-	"project_id" text NOT NULL,
+	"id" text NOT NULL,
 	"version" integer NOT NULL,
+	"project_id" text NOT NULL,
 	"definition" jsonb NOT NULL,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "workflows_id_version_pk" PRIMARY KEY("id","version")
 );
 --> statement-breakpoint
 ALTER TABLE "agent_specs" ADD CONSTRAINT "agent_specs_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -213,7 +224,6 @@ ALTER TABLE "approval_requests" ADD CONSTRAINT "approval_requests_plan_id_recove
 ALTER TABLE "arena_actions" ADD CONSTRAINT "arena_actions_room_id_arena_rooms_id_fk" FOREIGN KEY ("room_id") REFERENCES "public"."arena_rooms"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "arena_actions" ADD CONSTRAINT "arena_actions_player_id_arena_players_id_fk" FOREIGN KEY ("player_id") REFERENCES "public"."arena_players"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "arena_players" ADD CONSTRAINT "arena_players_room_id_arena_rooms_id_fk" FOREIGN KEY ("room_id") REFERENCES "public"."arena_rooms"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "arena_rooms" ADD CONSTRAINT "arena_rooms_workflow_id_workflows_id_fk" FOREIGN KEY ("workflow_id") REFERENCES "public"."workflows"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "arena_rooms" ADD CONSTRAINT "arena_rooms_run_id_runs_id_fk" FOREIGN KEY ("run_id") REFERENCES "public"."runs"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "artifact_versions" ADD CONSTRAINT "artifact_versions_run_id_runs_id_fk" FOREIGN KEY ("run_id") REFERENCES "public"."runs"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "artifact_versions" ADD CONSTRAINT "artifact_versions_producer_execution_id_task_executions_id_fk" FOREIGN KEY ("producer_execution_id") REFERENCES "public"."task_executions"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -221,7 +231,6 @@ ALTER TABLE "dependency_edges" ADD CONSTRAINT "dependency_edges_run_id_runs_id_f
 ALTER TABLE "events" ADD CONSTRAINT "events_run_id_runs_id_fk" FOREIGN KEY ("run_id") REFERENCES "public"."runs"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "recovery_plans" ADD CONSTRAINT "recovery_plans_incident_id_security_incidents_id_fk" FOREIGN KEY ("incident_id") REFERENCES "public"."security_incidents"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "runs" ADD CONSTRAINT "runs_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "runs" ADD CONSTRAINT "runs_workflow_id_workflows_id_fk" FOREIGN KEY ("workflow_id") REFERENCES "public"."workflows"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "security_incidents" ADD CONSTRAINT "security_incidents_run_id_runs_id_fk" FOREIGN KEY ("run_id") REFERENCES "public"."runs"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "security_incidents" ADD CONSTRAINT "security_incidents_source_version_id_source_versions_id_fk" FOREIGN KEY ("source_version_id") REFERENCES "public"."source_versions"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "source_versions" ADD CONSTRAINT "source_versions_run_id_runs_id_fk" FOREIGN KEY ("run_id") REFERENCES "public"."runs"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -231,10 +240,11 @@ ALTER TABLE "tool_requests" ADD CONSTRAINT "tool_requests_run_id_runs_id_fk" FOR
 ALTER TABLE "tool_requests" ADD CONSTRAINT "tool_requests_execution_id_task_executions_id_fk" FOREIGN KEY ("execution_id") REFERENCES "public"."task_executions"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "workflows" ADD CONSTRAINT "workflows_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "arena_actions_command_uq" ON "arena_actions" USING btree ("command_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "arena_rooms_join_code_uq" ON "arena_rooms" USING btree ("join_code_hash");--> statement-breakpoint
 CREATE UNIQUE INDEX "artifact_version_uq" ON "artifact_versions" USING btree ("run_id","name","version");--> statement-breakpoint
 CREATE INDEX "dep_edges_from_idx" ON "dependency_edges" USING btree ("run_id","from_id");--> statement-breakpoint
 CREATE INDEX "dep_edges_to_idx" ON "dependency_edges" USING btree ("run_id","to_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "events_run_seq_uq" ON "events" USING btree ("run_id","seq");--> statement-breakpoint
 CREATE UNIQUE INDEX "source_version_uq" ON "source_versions" USING btree ("run_id","name","version");--> statement-breakpoint
 CREATE UNIQUE INDEX "task_exec_attempt_uq" ON "task_executions" USING btree ("run_id","task_id","attempt");--> statement-breakpoint
-CREATE UNIQUE INDEX "workflows_project_version_uq" ON "workflows" USING btree ("project_id","id","version");
+CREATE INDEX "workflows_project_idx" ON "workflows" USING btree ("project_id");

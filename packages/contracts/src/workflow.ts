@@ -25,6 +25,11 @@ export const SourceDefinition = z.object({
   classification: Classification,
   /** Where the broker loads the content from at run time (file path or URL inside the sandbox). */
   location: z.string().min(1),
+  /**
+   * Optional: name of a TRUSTED source in this workflow that can replace this one during recovery.
+   * Used to propose a recovery plan automatically after quarantine (e.g. from the Arena).
+   */
+  fallbackSourceName: z.string().optional(),
 });
 export type SourceDefinition = z.infer<typeof SourceDefinition>;
 
@@ -73,6 +78,12 @@ export const WorkflowDefinition = z
         if (!tasks.has(d)) ctx.addIssue({ code: "custom", message: `task ${t.id}: unknown dep ${d}` });
       for (const s of t.sourceNames)
         if (!sources.has(s)) ctx.addIssue({ code: "custom", message: `task ${t.id}: unknown source ${s}` });
+    }
+    for (const s of w.sources) {
+      if (!s.fallbackSourceName) continue;
+      const fb = w.sources.find((x) => x.name === s.fallbackSourceName);
+      if (!fb) ctx.addIssue({ code: "custom", message: `source ${s.name}: unknown fallback ${s.fallbackSourceName}` });
+      else if (fb.trust !== "TRUSTED") ctx.addIssue({ code: "custom", message: `source ${s.name}: fallback must be TRUSTED` });
     }
     for (const p of w.attackPayloads)
       if (!sources.has(p.targetSourceName))

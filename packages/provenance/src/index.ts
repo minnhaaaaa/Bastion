@@ -1,6 +1,7 @@
 /**
  * @bastion/provenance — owner: Member 3
- * ArtifactBroker: hashing, versioning, CONSUMED/PRODUCED/DERIVED_FROM edges.
- * See TEAM_PLAN.md and packages/contracts/src/ports.ts.
+ * ArtifactBroker: hashing, versioning, CONSUMED/PRODUCED/DERIVED_FROM edges via the event journal.
  */
-export {};
+export * from "./blobs";
+export * from "./redact";
+export * from "./broker";

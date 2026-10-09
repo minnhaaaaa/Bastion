@@ -30,7 +30,8 @@ export const Project = z.object({
   id: Id.ProjectId,
   ownerId: Id.UserId,
   name: z.string(),
-  policySetId: z.string(),
+  /** Policies now live in workflow definitions; kept for forward compatibility. */
+  policySetId: z.string().nullable(),
 });
 export type Project = z.infer<typeof Project>;
 

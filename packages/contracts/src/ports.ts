@@ -144,6 +144,31 @@ export interface RecoveryService {
   approveAndRecover(input: { approvalId: string; planId: string; actionDigest: string; actorId: string }): Promise<void>;
 }
 
+// ── Run launch, verification, target audit (Member 2) ──────────────────────
+// Injected into the API by the composition root (apps/api/src/index.ts).
+export interface RunLauncher {
+  /**
+   * Called after the API has appended run.created. Loads the workflow's sources through the
+   * broker, installs any queued attack payloads (Arena) BEFORE scheduling, then Scheduler.start.
+   */
+  launch(input: {
+    runId: string;
+    workflow: import("./workflow").Workflow;
+    attackPayloadIds: string[];
+    traceId: string;
+  }): Promise<void>;
+}
+
+export interface RecoveryVerifier {
+  /** Runs acceptance + security checks after a recovery rerun. Never fabricates passes. */
+  verify(runId: string, planId: string): Promise<{ name: string; passed: boolean; detail?: string }[]>;
+}
+
+export interface TargetAudit {
+  /** Forbidden operations that actually reached sandbox targets for this run (target-side log). */
+  unsafeAccessCount(runId: string): Promise<number>;
+}
+
 // ── Workflow registry (Member 3) ───────────────────────────────────────────
 // Workflow definitions are data submitted via POST /api/workflows and stored in Postgres.
 export interface WorkflowRepository {

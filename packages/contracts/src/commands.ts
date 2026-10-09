@@ -1,6 +1,7 @@
 import { z } from "zod";
 import * as Id from "./ids";
 import { WorkflowDefinition } from "./workflow";
+import { Severity } from "./enums";
 
 /**
  * REST command bodies (ARCHITECTURE §8). Every mutation carries a client-generated
@@ -9,6 +10,12 @@ import { WorkflowDefinition } from "./workflow";
  */
 const cmd = <S extends z.ZodRawShape>(shape: S) => z.object({ commandId: Id.CommandId, ...shape });
 
+// POST /api/projects
+export const CreateProjectCmd = cmd({
+  name: z.string().min(1).max(120),
+});
+export type CreateProjectCmd = z.infer<typeof CreateProjectCmd>;
+
 // POST /api/workflows — register a workflow definition (stored in Postgres, versioned)
 export const CreateWorkflowCmd = cmd({
   projectId: Id.ProjectId,
@@ -16,12 +23,26 @@ export const CreateWorkflowCmd = cmd({
 });
 export type CreateWorkflowCmd = z.infer<typeof CreateWorkflowCmd>;
 
+// POST /api/workflows/:id/versions — new version of an existing workflow
+export const CreateWorkflowVersionCmd = cmd({
+  definition: WorkflowDefinition,
+});
+export type CreateWorkflowVersionCmd = z.infer<typeof CreateWorkflowVersionCmd>;
+
 // POST /api/runs
 export const CreateRunCmd = cmd({
   workflowId: Id.WorkflowId,
   mode: z.enum(["PROTECTED", "BASELINE"]),
 });
 export type CreateRunCmd = z.infer<typeof CreateRunCmd>;
+
+// POST /api/runs/:id/incidents — operator opens an incident on a suspicious source manually
+export const OpenIncidentCmd = cmd({
+  sourceVersionId: Id.SourceVersionId,
+  severity: Severity,
+  reason: z.string().min(1).max(500),
+});
+export type OpenIncidentCmd = z.infer<typeof OpenIncidentCmd>;
 
 // POST /api/incidents/:id/quarantine
 export const QuarantineCmd = cmd({
@@ -50,6 +71,15 @@ export const CreateRoomCmd = cmd({
   workflowId: Id.WorkflowId,
 });
 export type CreateRoomCmd = z.infer<typeof CreateRoomCmd>;
+
+export const CreateRoomResult = z.object({
+  roomId: Id.RoomId,
+  /** Shown on the projector / encoded in the QR join URL. Only its hash is stored. */
+  joinCode: z.string(),
+  /** Bearer token for host-only controls and the projector socket. Only its hash is stored. */
+  hostToken: z.string(),
+});
+export type CreateRoomResult = z.infer<typeof CreateRoomResult>;
 
 // POST /api/arena/rooms/:id/join
 export const JoinRoomCmd = cmd({

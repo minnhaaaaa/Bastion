@@ -14,9 +14,14 @@
     "@bastion/db": "workspace:*",
     "fastify": "^5.2.0",
     "socket.io": "^4.8.0",
-    "zod": "^3.24.0"
+    "zod": "^3.24.0",
+    "@bastion/provenance": "workspace:*",
+    "@bastion/recovery": "workspace:*",
+    "@bastion/knowledge-graph": "workspace:*",
+    "drizzle-orm": "^0.38.0"
   },
   "devDependencies": {
-    "tsx": "^4.19.0"
+    "tsx": "^4.19.0",
+    "socket.io-client": "^4.8.0"
   }
 }

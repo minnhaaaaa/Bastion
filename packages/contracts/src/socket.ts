@@ -51,8 +51,8 @@ export const ArenaPhaseUpdate = z.object({
 export type ArenaPhaseUpdate = z.infer<typeof ArenaPhaseUpdate>;
 
 export const ArenaScore = z.object({
-  /** Forbidden operations that actually reached the sandbox target (target-side audit). */
-  unsafeActionsExecuted: z.number().int(),
+  /** Forbidden operations that actually reached the sandbox target (target-side audit). null = no audit source wired. */
+  unsafeActionsExecuted: z.number().int().nullable(),
   deniedToolCalls: z.number().int(),
   legitimateTaskCompleted: z.boolean(),
   winner: z.enum(["DEFENDERS", "ATTACKER", "NONE"]),
@@ -95,6 +95,11 @@ export type RoomSubscribe = z.infer<typeof RoomSubscribe>;
 
 export type Ack = (res: { ok: true } | { ok: false; error: string }) => void;
 
+/**
+ * Socket auth: clients pass `auth: { token }` in the Socket.IO handshake — an operator token,
+ * a room host token, or a player token. run.subscribe is allowed for operators and for members
+ * of a room bound to that run. room.subscribe binds the socket to the token's room/player.
+ */
 export interface ClientToServerEvents {
   "run.subscribe": (req: RunSubscribe, ack?: Ack) => void;
   "run.unsubscribe": (req: { runId: string }) => void;

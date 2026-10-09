@@ -43,7 +43,8 @@ export const projects = pgTable("projects", {
   id: text("id").primaryKey(),
   ownerId: text("owner_id").notNull(),
   name: text("name").notNull(),
-  policySetId: text("policy_set_id").notNull(),
+  policySetId: text("policy_set_id"),
+  createdAt: ts("created_at").notNull().defaultNow(),
 });
 
 export const agentSpecs = pgTable("agent_specs", {
@@ -57,20 +58,20 @@ export const agentSpecs = pgTable("agent_specs", {
 export const workflows = pgTable(
   "workflows",
   {
-    id: text("id").primaryKey(),
-    projectId: text("project_id").notNull().references(() => projects.id),
+    id: text("id").notNull(),
     version: integer("version").notNull(),
+    projectId: text("project_id").notNull().references(() => projects.id),
     definition: jsonb("definition").$type<C.WorkflowDefinition>().notNull(),
     createdAt: ts("created_at").notNull().defaultNow(),
   },
-  (t) => [uniqueIndex("workflows_project_version_uq").on(t.projectId, t.id, t.version)],
+  (t) => [primaryKey({ columns: [t.id, t.version] }), index("workflows_project_idx").on(t.projectId)],
 );
 
 export const runs = pgTable("runs", {
   id: text("id").primaryKey(),
   projectId: text("project_id").notNull().references(() => projects.id),
-  workflowId: text("workflow_id").notNull().references(() => workflows.id),
-  /** Snapshot of the definition version the run was started with. */
+  /** (workflowId, workflowVersion) → workflows; validated in code (composite key). */
+  workflowId: text("workflow_id").notNull(),
   workflowVersion: integer("workflow_version").notNull(),
   mode: runMode("mode").notNull(),
   status: runStatus("status").notNull().default("CREATED"),
@@ -233,16 +234,25 @@ export const commandResults = pgTable("command_results", {
   createdAt: ts("created_at").notNull().defaultNow(),
 });
 
-export const arenaRooms = pgTable("arena_rooms", {
-  id: text("id").primaryKey(),
-  workflowId: text("workflow_id").notNull().references(() => workflows.id),
-  runId: text("run_id").references(() => runs.id),
-  joinCodeHash: text("join_code_hash").notNull(),
-  status: roomStatus("status").notNull().default("OPEN"),
-  phase: arenaPhase("phase").notNull().default("LOBBY"),
-  hostId: text("host_id").notNull(),
-  expiresAt: ts("expires_at").notNull(),
-});
+export const arenaRooms = pgTable(
+  "arena_rooms",
+  {
+    id: text("id").primaryKey(),
+    workflowId: text("workflow_id").notNull(),
+    runId: text("run_id").references(() => runs.id),
+    joinCodeHash: text("join_code_hash").notNull(),
+    hostTokenHash: text("host_token_hash").notNull(),
+    status: roomStatus("status").notNull().default("OPEN"),
+    phase: arenaPhase("phase").notNull().default("LOBBY"),
+    phaseStartedAt: ts("phase_started_at").notNull(),
+    phaseEndsAt: ts("phase_ends_at"),
+    /** Attack payload ids queued during ATTACK_WINDOW, installed by the RunLauncher before scheduling. */
+    pendingAttackPayloadIds: jsonb("pending_attack_payload_ids").$type<string[]>().notNull().default([]),
+    hostId: text("host_id").notNull(),
+    expiresAt: ts("expires_at").notNull(),
+  },
+  (t) => [uniqueIndex("arena_rooms_join_code_uq").on(t.joinCodeHash)],
+);
 
 export const arenaPlayers = pgTable("arena_players", {
   id: text("id").primaryKey(),
@@ -252,7 +262,11 @@ export const arenaPlayers = pgTable("arena_players", {
   tokenHash: text("token_hash").notNull(),
   role: arenaRole("role").notNull(),
   displayAlias: text("display_alias").notNull(),
-  connected: boolean("connected").notNull().default(true),
+  connected: boolean("connected").notNull().default(false),
+  cards: jsonb("cards").$type<string[]>().notNull().default([]),
+  usedCards: jsonb("used_cards").$type<string[]>().notNull().default([]),
+  evidence: jsonb("evidence").$type<{ id: string; kind: string; summary: string }[]>().notNull().default([]),
+  joinedAt: ts("joined_at").notNull().defaultNow(),
 });
 
 export const arenaActions = pgTable(
@@ -264,6 +278,7 @@ export const arenaActions = pgTable(
     commandId: text("command_id").notNull(),
     type: text("type").notNull(),
     outcome: actionOutcome("outcome").notNull(),
+    message: text("message").notNull().default(""),
     createdAt: ts("created_at").notNull().defaultNow(),
   },
   (t) => [uniqueIndex("arena_actions_command_uq").on(t.commandId)],

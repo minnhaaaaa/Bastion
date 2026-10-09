@@ -89,16 +89,18 @@ Owns: `runtime-adapter`, `runtime-pi`, `security`, `orchestrator`, `scenario-kit
 
 Implementation and integration instructions: `sandbox/README.md`. The Docker worker and compose configuration are implemented; a real host-worker test verifies zero audited reads for a protected denial and an actual baseline read. Container egress checks remain pending because the Docker daemon was unavailable during implementation. A provider-driven run requires configured credentials and Member 3's real journal/broker. Tool approval policies stay blocked until an authorized tool-approval service exists; the frozen contracts were not changed.
 
-## Member 3 — Data, provenance, recovery, API
+## Member 3 — Data, provenance, recovery, API ✅ implemented
 
-Owns: `db`, `provenance`, `knowledge-graph`, `recovery`, `apps/api`.
+Owns: `db`, `provenance`, `knowledge-graph`, `recovery`, `apps/api`. API reference: [`apps/api/README.md`](apps/api/README.md).
 
-- [ ] **Thin live path first** (unblocks Member 1): `EventJournal`, `WorkflowRepository`, `POST /api/workflows`, `POST/GET /api/runs`, `GET /api/runs/:id/events`, socket `run.subscribe`.
-- [ ] `db`: `EventJournal` (seq assigned in a transaction, `UNIQUE(run_id, seq)`; `onCommitted` after commit) + repositories. Build snapshots with `replay()`.
-- [ ] `provenance`: `ArtifactBroker` (sha256, versions, blob store path from config, edges into `dependency_edges`, emits `artifact.*` / `source.*`; `consume` throws on unusable versions).
-- [ ] `knowledge-graph`: projector (idempotent MERGE keyed on ids + `sourceEventId`, cursor per run, emits `graph.projected`); `impactSet` Cypher, tested against generated graphs.
-- [ ] `recovery`: quarantine synchronously in Postgres → `Scheduler.hold` → invalidate → `containment.applied` (widen if graph lags); plan (topo sort, preserved set, sha256 digest); approvals (single-use, expiring, digest-bound, never by an agent); `approveAndRecover` → `Scheduler.rerun` → verifier → `recovery.completed`.
-- [ ] `apps/api`: remaining REST from ARCHITECTURE §8 (`ApiError` body), arena rooms (join code hash, player tokens, 2–6 role allocation, phase machine on server clock, unicast `player.private_state`, reveal gating).
+- [x] **Thin live path** (unblocks Member 1): `EventJournal`, `WorkflowRepository`, `POST /api/workflows`, `POST/GET /api/runs`, `GET /api/runs/:id/events`, socket `run.subscribe`.
+- [x] `db`: `PgEventJournal` (per-run lock + `UNIQUE(run_id, seq)`, events and relational rows in one transaction, listeners after commit in commit order) + repositories + PGlite test harness (`@bastion/db/testing`).
+- [x] `provenance`: `PgArtifactBroker` (sha256 content-addressed blobs in `BLOB_DIR`, versions, observed CONSUMED/PRODUCED/DERIVED_FROM edges, `consume` refuses unusable versions, redacted previews).
+- [x] `knowledge-graph`: `Neo4jProjector` (idempotent MERGEs, per-run cursor, replay from journal, emits `graph.projected`); `impactSet` Cypher. Live test runs when `NEO4J_TEST_URI` is set.
+- [x] `recovery`: `RecoveryManager` — auto-incident on DENY traced to untrusted upstream sources; synchronous quarantine → `Scheduler.hold` → invalidate → `containment.applied`; topological plan + preserved set + sha256 digest; single-use, expiring, digest-bound, human-only approvals; `approveAndRecover` → `Scheduler.rerun` → `RecoveryVerifier` → `recovery.completed` (fails closed).
+- [x] `apps/api`: all REST from ARCHITECTURE §8 + workflows/projects, bearer auth (operator/host/player), `commandId` idempotency, Socket.IO with gap-free sync + `lastSeq` replay, arena rooms (hashed join codes/tokens, 2–6 role allocation, server-clock phases, unicast private state, reveal gating).
+- [ ] Needs Member 2 to plug real `RunLauncher` / `Scheduler` / `RecoveryVerifier` / `TargetAudit` into `apps/api/src/index.ts` (`runtime` slot). Until then `/health.runtimeConnected=false` and runs/rooms return 503.
+- [ ] Verify against real Postgres + Neo4j via `docker compose` (tests use in-process PGlite).
 
 ---
 

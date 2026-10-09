@@ -29,9 +29,21 @@ importers:
       '@bastion/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@bastion/knowledge-graph':
+        specifier: workspace:*
+        version: link:../../packages/knowledge-graph
+      '@bastion/provenance':
+        specifier: workspace:*
+        version: link:../../packages/provenance
+      '@bastion/recovery':
+        specifier: workspace:*
+        version: link:../../packages/recovery
       '@fastify/cors':
         specifier: ^10.0.0
         version: 10.1.0
+      drizzle-orm:
+        specifier: ^0.38.0
+        version: 0.38.4(@electric-sql/pglite@0.5.8)(@types/react@19.3.0)(postgres@3.4.9)(react@19.3.0)
       fastify:
         specifier: ^5.2.0
         version: 5.12.5
@@ -42,6 +54,9 @@ importers:
         specifier: ^3.24.0
         version: 3.25.76
     devDependencies:
+      socket.io-client:
+        specifier: ^4.8.0
+        version: 4.8.4(supports-color@7.2.0)
       tsx:
         specifier: ^4.19.0
         version: 4.23.15
@@ -102,11 +117,14 @@ importers:
         version: link:../contracts
       drizzle-orm:
         specifier: ^0.38.0
-        version: 0.38.4(@types/react@19.3.0)(postgres@3.4.9)(react@19.3.0)
+        version: 0.38.4(@electric-sql/pglite@0.5.8)(@types/react@19.3.0)(postgres@3.4.9)(react@19.3.0)
       postgres:
         specifier: ^3.4.5
         version: 3.4.9
     devDependencies:
+      '@electric-sql/pglite':
+        specifier: ^0.5.8
+        version: 0.5.8
       drizzle-kit:
         specifier: ^0.30.0
         version: 0.30.6(supports-color@7.2.0)
@@ -119,6 +137,13 @@ importers:
       neo4j-driver:
         specifier: ^5.27.0
         version: 5.28.3
+    devDependencies:
+      '@bastion/db':
+        specifier: workspace:*
+        version: link:../db
+      '@bastion/recovery':
+        specifier: workspace:*
+        version: link:../recovery
 
   packages/orchestrator:
     dependencies:
@@ -140,6 +165,13 @@ importers:
       '@bastion/contracts':
         specifier: workspace:*
         version: link:../contracts
+    devDependencies:
+      '@bastion/db':
+        specifier: workspace:*
+        version: link:../db
+      '@bastion/provenance':
+        specifier: workspace:*
+        version: link:../provenance
 
   packages/runtime-adapter:
     dependencies:
@@ -354,6 +386,9 @@ packages:
 
   '@drizzle-team/brocli@0.10.2':
     resolution: {integrity: sha512-z33Il7l5dKjUgGULTqBsQBQwckHh5AbIuxhdsIxDDiZAzBOrZO6q9ogcWC65kU382AfynTfgNumVcNIjuIua6w==}
+
+  '@electric-sql/pglite@0.5.8':
+    resolution: {integrity: sha512-n9tsbUOhwx2epK1V0ZG9Ar4SHWUju04dhmzZXiSBXwBoleOvIfals33NAaWgagQVAL4Rbvx/Ptsu3P+pA09f6Q==}
 
   '@esbuild-kit/core-utils@3.3.2':
     resolution: {integrity: sha512-sPRAnw9CdSsRmEtnsl2WXWdyquogVpB3yZ3dgwJfe8zrOzTsV7cJvmwrKVa+0ma5BoiGJ+BoqkMvawbayKUsqQ==}
@@ -3227,6 +3262,8 @@ snapshots:
 
   '@drizzle-team/brocli@0.10.2': {}
 
+  '@electric-sql/pglite@0.5.8': {}
+
   '@esbuild-kit/core-utils@3.3.2':
     dependencies:
       esbuild: 0.18.20
@@ -4341,8 +4378,9 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  drizzle-orm@0.38.4(@types/react@19.3.0)(postgres@3.4.9)(react@19.3.0):
+  drizzle-orm@0.38.4(@electric-sql/pglite@0.5.8)(@types/react@19.3.0)(postgres@3.4.9)(react@19.3.0):
     optionalDependencies:
+      '@electric-sql/pglite': 0.5.8
       '@types/react': 19.3.0
       postgres: 3.4.9
       react: 19.3.0

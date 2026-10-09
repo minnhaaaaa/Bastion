@@ -10,8 +10,8 @@
 //   (ToolCall)-[:TARGETED]->(Resource)
 //   (ToolCall)-[:GOVERNED_BY]->(Policy)
 //   (Source|ArtifactVersion|ToolCall)-[:FLAGGED_IN]->(SecurityIncident)
-//   (TaskExecution)-[:DEPENDS_ON]->(TaskExecution)               upstream → downstream; derived from the
-//       logical TaskSpec-level DEPENDS_ON rows in dependency_edges (fromType 'TaskSpec')
+//   DEPENDS_ON is task-level (TaskSpec → TaskSpec) and stays in Postgres dependency_edges; the
+//       authoritative containment closure uses it there. It is not projected into Neo4j.
 // Every node and relationship carries: id, runId, sourceEventId (+ seq).
 
 CREATE CONSTRAINT agent_id IF NOT EXISTS FOR (n:Agent) REQUIRE n.id IS UNIQUE;

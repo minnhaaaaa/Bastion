@@ -1,5 +1,5 @@
 {
-  "id": "d71d7843-5659-479b-a670-ab39d6d91971",
+  "id": "10697c2f-cbfa-44e5-8103-37c88421a871",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -181,6 +181,13 @@
           "primaryKey": false,
           "notNull": true
         },
+        "message": {
+          "name": "message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -286,7 +293,35 @@
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
-          "default": true
+          "default": false
+        },
+        "cards": {
+          "name": "cards",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "used_cards": {
+          "name": "used_cards",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "evidence": {
+          "name": "evidence",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "joined_at": {
+          "name": "joined_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {},
@@ -339,6 +374,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "host_token_hash": {
+          "name": "host_token_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
         "status": {
           "name": "status",
           "type": "room_status",
@@ -355,6 +396,25 @@
           "notNull": true,
           "default": "'LOBBY'"
         },
+        "phase_started_at": {
+          "name": "phase_started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "phase_ends_at": {
+          "name": "phase_ends_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pending_attack_payload_ids": {
+          "name": "pending_attack_payload_ids",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
         "host_id": {
           "name": "host_id",
           "type": "text",
@@ -368,21 +428,24 @@
           "notNull": true
         }
       },
-      "indexes": {},
+      "indexes": {
+        "arena_rooms_join_code_uq": {
+          "name": "arena_rooms_join_code_uq",
+          "columns": [
+            {
+              "expression": "join_code_hash",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
-        "arena_rooms_workflow_id_workflows_id_fk": {
-          "name": "arena_rooms_workflow_id_workflows_id_fk",
-          "tableFrom": "arena_rooms",
-          "tableTo": "workflows",
-          "columnsFrom": [
-            "workflow_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
         "arena_rooms_run_id_runs_id_fk": {
           "name": "arena_rooms_run_id_runs_id_fk",
           "tableFrom": "arena_rooms",
@@ -839,7 +902,14 @@
           "name": "policy_set_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {},
@@ -977,19 +1047,6 @@
           "tableTo": "projects",
           "columnsFrom": [
             "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "runs_workflow_id_workflows_id_fk": {
-          "name": "runs_workflow_id_workflows_id_fk",
-          "tableFrom": "runs",
-          "tableTo": "workflows",
-          "columnsFrom": [
-            "workflow_id"
           ],
           "columnsTo": [
             "id"
@@ -1531,18 +1588,18 @@
         "id": {
           "name": "id",
           "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "project_id": {
-          "name": "project_id",
-          "type": "text",
           "primaryKey": false,
           "notNull": true
         },
         "version": {
           "name": "version",
           "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "project_id": {
+          "name": "project_id",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
         },
@@ -1561,29 +1618,17 @@
         }
       },
       "indexes": {
-        "workflows_project_version_uq": {
-          "name": "workflows_project_version_uq",
+        "workflows_project_idx": {
+          "name": "workflows_project_idx",
           "columns": [
             {
               "expression": "project_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
-            },
-            {
-              "expression": "id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "version",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
             }
           ],
-          "isUnique": true,
+          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -1604,7 +1649,15 @@
           "onUpdate": "no action"
         }
       },
-      "compositePrimaryKeys": {},
+      "compositePrimaryKeys": {
+        "workflows_id_version_pk": {
+          "name": "workflows_id_version_pk",
+          "columns": [
+            "id",
+            "version"
+          ]
+        }
+      },
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
