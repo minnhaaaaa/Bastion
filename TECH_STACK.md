@@ -110,6 +110,7 @@ Scripts must be implemented in the repository; these are the intended developer 
 5. Public Arena uses **only synthetic credentials/data** and an isolated target service.
 6. Validate every websocket/HTTP command against room membership and role-based authorization.
 7. Never claim unsupported safety coverage; show actual test outcomes.
+8. **Zero hardcoded data.** Nothing in the codebase may contain hardcoded data: no canned events, mock streams, fixture JSON, sample runs, hardcoded agents/tasks/sources/capabilities/policy rules, fallback hosts/ports/credentials, or placeholder numbers in the UI. Workflows (agents, tasks, sources, capabilities, policy rules, attack payloads) are data submitted via `POST /api/workflows` and stored in Postgres; configuration comes only from required environment variables; everything the UI shows is real-time from persisted backend events. Test doubles and generated test data are allowed **only inside automated tests**. Demo content will be decided later and will also be loaded as data, not code.
 
 ## 7. Integration priorities
 

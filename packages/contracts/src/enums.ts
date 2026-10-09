@@ -52,7 +52,7 @@ export type ApprovalStatus = z.infer<typeof ApprovalStatus>;
 export const AgentRole = z.enum(["RESEARCH", "BUILDER", "VERIFIER"]);
 export type AgentRole = z.infer<typeof AgentRole>;
 
-/** Demo round state machine (ARCHITECTURE §9). */
+/** Arena round state machine (ARCHITECTURE §9). */
 export const ArenaPhase = z.enum([
   "LOBBY",
   "BRIEFING",

@@ -53,11 +53,26 @@ export const agentSpecs = pgTable("agent_specs", {
   capabilityProfile: jsonb("capability_profile").$type<string[]>().notNull(),
 });
 
+/** Workflow definitions are data (validated by contracts WorkflowDefinition), versioned, never hardcoded. */
+export const workflows = pgTable(
+  "workflows",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id").notNull().references(() => projects.id),
+    version: integer("version").notNull(),
+    definition: jsonb("definition").$type<C.WorkflowDefinition>().notNull(),
+    createdAt: ts("created_at").notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("workflows_project_version_uq").on(t.projectId, t.id, t.version)],
+);
+
 export const runs = pgTable("runs", {
   id: text("id").primaryKey(),
   projectId: text("project_id").notNull().references(() => projects.id),
-  scenarioId: text("scenario_id").notNull(),
-  mode: runMode("mode").notNull().default("PROTECTED"),
+  workflowId: text("workflow_id").notNull().references(() => workflows.id),
+  /** Snapshot of the definition version the run was started with. */
+  workflowVersion: integer("workflow_version").notNull(),
+  mode: runMode("mode").notNull(),
   status: runStatus("status").notNull().default("CREATED"),
   startedAt: ts("started_at"),
   finishedAt: ts("finished_at"),
@@ -220,6 +235,7 @@ export const commandResults = pgTable("command_results", {
 
 export const arenaRooms = pgTable("arena_rooms", {
   id: text("id").primaryKey(),
+  workflowId: text("workflow_id").notNull().references(() => workflows.id),
   runId: text("run_id").references(() => runs.id),
   joinCodeHash: text("join_code_hash").notNull(),
   status: roomStatus("status").notNull().default("OPEN"),

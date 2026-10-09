@@ -1,5 +1,5 @@
 {
-  "id": "c097c9dc-563f-47a5-ac00-508900d2288c",
+  "id": "d71d7843-5659-479b-a670-ab39d6d91971",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -321,6 +321,12 @@
           "primaryKey": true,
           "notNull": true
         },
+        "workflow_id": {
+          "name": "workflow_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
         "run_id": {
           "name": "run_id",
           "type": "text",
@@ -364,6 +370,19 @@
       },
       "indexes": {},
       "foreignKeys": {
+        "arena_rooms_workflow_id_workflows_id_fk": {
+          "name": "arena_rooms_workflow_id_workflows_id_fk",
+          "tableFrom": "arena_rooms",
+          "tableTo": "workflows",
+          "columnsFrom": [
+            "workflow_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
         "arena_rooms_run_id_runs_id_fk": {
           "name": "arena_rooms_run_id_runs_id_fk",
           "tableFrom": "arena_rooms",
@@ -910,9 +929,15 @@
           "primaryKey": false,
           "notNull": true
         },
-        "scenario_id": {
-          "name": "scenario_id",
+        "workflow_id": {
+          "name": "workflow_id",
           "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "workflow_version": {
+          "name": "workflow_version",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true
         },
@@ -921,8 +946,7 @@
           "type": "run_mode",
           "typeSchema": "public",
           "primaryKey": false,
-          "notNull": true,
-          "default": "'PROTECTED'"
+          "notNull": true
         },
         "status": {
           "name": "status",
@@ -953,6 +977,19 @@
           "tableTo": "projects",
           "columnsFrom": [
             "project_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "runs_workflow_id_workflows_id_fk": {
+          "name": "runs_workflow_id_workflows_id_fk",
+          "tableFrom": "runs",
+          "tableTo": "workflows",
+          "columnsFrom": [
+            "workflow_id"
           ],
           "columnsTo": [
             "id"
@@ -1473,6 +1510,92 @@
           "tableTo": "task_executions",
           "columnsFrom": [
             "execution_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.workflows": {
+      "name": "workflows",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "project_id": {
+          "name": "project_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "definition": {
+          "name": "definition",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "workflows_project_version_uq": {
+          "name": "workflows_project_version_uq",
+          "columns": [
+            {
+              "expression": "project_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "version",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "workflows_project_id_projects_id_fk": {
+          "name": "workflows_project_id_projects_id_fk",
+          "tableFrom": "workflows",
+          "tableTo": "projects",
+          "columnsFrom": [
+            "project_id"
           ],
           "columnsTo": [
             "id"

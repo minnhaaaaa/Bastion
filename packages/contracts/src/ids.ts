@@ -21,6 +21,7 @@ export const ID_PREFIXES = {
   trace: "trace_",
   event: "evt_",
   edge: "edge_",
+  workflow: "wf_",
   project: "proj_",
   user: "user_",
 } as const;
@@ -34,7 +35,7 @@ export const RunId = idOf("run");
 export const TaskId = idOf("task");
 export const ExecutionId = idOf("exec");
 export const AgentId = idOf("agent");
-/** A versioned source document (e.g. an untrusted docs fixture). */
+/** A versioned source document (e.g. an untrusted document). */
 export const SourceVersionId = idOf("source");
 export const ArtifactVersionId = idOf("artifact");
 export const ToolRequestId = idOf("tool");
@@ -47,6 +48,7 @@ export const CommandId = idOf("command");
 export const TraceId = idOf("trace");
 export const EventId = idOf("event");
 export const EdgeId = idOf("edge");
+export const WorkflowId = idOf("workflow");
 export const ProjectId = idOf("project");
 export const UserId = idOf("user");
 
@@ -66,6 +68,7 @@ export type CommandId = z.infer<typeof CommandId>;
 export type TraceId = z.infer<typeof TraceId>;
 export type EventId = z.infer<typeof EventId>;
 export type EdgeId = z.infer<typeof EdgeId>;
+export type WorkflowId = z.infer<typeof WorkflowId>;
 export type ProjectId = z.infer<typeof ProjectId>;
 export type UserId = z.infer<typeof UserId>;
 

@@ -31,9 +31,15 @@ export class SeqGapError extends Error {
   }
 }
 
-export function emptySnapshot(runId: string, projectId: string, scenarioId: string, mode: "PROTECTED" | "BASELINE"): RunSnapshot {
+export function emptySnapshot(
+  runId: string,
+  projectId: string,
+  workflowId: string,
+  workflowVersion: number,
+  mode: "PROTECTED" | "BASELINE",
+): RunSnapshot {
   return {
-    run: { id: runId, projectId, scenarioId, mode, status: "CREATED", startedAt: null, finishedAt: null },
+    run: { id: runId, projectId, workflowId, workflowVersion, mode, status: "CREATED", startedAt: null, finishedAt: null },
     tasks: {},
     executions: {},
     latestExecutionByTask: {},
@@ -59,7 +65,7 @@ export function emptySnapshot(runId: string, projectId: string, scenarioId: stri
 export function applyEvent(prev: RunSnapshot | null, e: RunEvent): RunSnapshot {
   if (prev === null) {
     if (e.type !== "run.created") throw new Error(`first event must be run.created, got ${e.type}`);
-    const s = emptySnapshot(e.runId, e.payload.projectId, e.payload.scenarioId, e.payload.mode);
+    const s = emptySnapshot(e.runId, e.payload.projectId, e.payload.workflowId, e.payload.workflowVersion, e.payload.mode);
     s.lastSeq = e.seq;
     return s;
   }
@@ -105,7 +111,7 @@ export function applyEvent(prev: RunSnapshot | null, e: RunEvent): RunSnapshot {
           title: t.title,
           declaredDeps: t.declaredDeps,
           sourceIds: t.sourceIds,
-          retryPolicy: { maxAttempts: 2, idempotent: true },
+          retryPolicy: t.retryPolicy,
         };
         for (const dep of t.declaredDeps) edge("TaskSpec", dep, "TaskSpec", t.taskId, "DEPENDS_ON");
       }

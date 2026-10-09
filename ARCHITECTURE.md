@@ -8,6 +8,8 @@
 
 Build a **security-native orchestrator** that uses existing agent harnesses for model/tool execution while controlling: task delegation, inter-agent artifact handoff, pre-tool authorization, incident containment, and task-level recovery.
 
+**Data rule:** **Zero hardcoded data.** Nothing in the codebase may contain hardcoded data: no canned events, mock streams, fixture JSON, sample runs, hardcoded agents/tasks/sources/capabilities/policy rules, fallback hosts/ports/credentials, or placeholder numbers in the UI. Workflows (agents, tasks, sources, capabilities, policy rules, attack payloads) are data submitted via `POST /api/workflows` and stored in Postgres; configuration comes only from required environment variables; everything the UI shows is real-time from persisted backend events. Test doubles and generated test data are allowed **only inside automated tests**. Demo content will be decided later and will also be loaded as data, not code.
+
 **Correct security claim:** We enforce *specified policies at controlled execution boundaries* and preserve traceable *observed* dependencies. We do not guarantee full prompt-injection immunity, hallucination elimination, or analysis of opaque external agents.
 
 ## 2. System context

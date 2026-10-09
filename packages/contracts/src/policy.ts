@@ -6,7 +6,7 @@ import { Classification, PolicyDecision } from "./enums";
  * Capability grammar: `<domain>.<operation>:<resource-glob>`
  *   fs.read:/workspace/docs/**
  *   fs.write:/workspace/repo/**
- *   net.http:docs.fixture.internal
+ *   net.http:docs.internal
  *   proc.exec:pnpm test
  * Anything not granted is denied (default deny).
  */

@@ -68,7 +68,7 @@ export type GraphView = z.infer<typeof GraphView>;
 
 export const RunSummary = z.object({
   id: Id.RunId,
-  scenarioId: z.string(),
+  workflowId: z.string(),
   mode: z.enum(["PROTECTED", "BASELINE"]),
   status: Run.shape.status,
   startedAt: z.string().nullable(),

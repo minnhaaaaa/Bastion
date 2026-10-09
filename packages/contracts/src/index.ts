@@ -7,5 +7,5 @@ export * from "./commands";
 export * from "./snapshot";
 export * from "./socket";
 export * from "./reduce";
-export * from "./scenario";
+export * from "./workflow";
 export type * from "./ports";

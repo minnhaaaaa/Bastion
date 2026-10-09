@@ -13,14 +13,14 @@ import {
   ToolOutcome,
   VerificationOutcome,
 } from "./enums";
-import { Preview, Timestamp } from "./entities";
+import { Preview, RetryPolicy, Timestamp } from "./entities";
 
 /**
  * Run event journal (ARCHITECTURE §6.1).
  *
  * Rules:
  *  - Persist before broadcast. `seq` is assigned by the journal, gap-free and ordered per run.
- *  - Payloads carry redacted previews / blobRefs only — never raw fixture content or secrets.
+ *  - Payloads carry redacted previews / blobRefs only — never raw source content or secrets.
  *  - Arena-private data (attacker identity, cards) never appears in run events.
  */
 
@@ -40,7 +40,8 @@ const ev = <T extends string, P extends z.ZodRawShape>(type: T, payload: P) =>
 // ── Run ────────────────────────────────────────────────────────────────────
 export const RunCreated = ev("run.created", {
   projectId: Id.ProjectId,
-  scenarioId: z.string(),
+  workflowId: Id.WorkflowId,
+  workflowVersion: z.number().int().min(1),
   mode: z.enum(["PROTECTED", "BASELINE"]),
 });
 export const RunStatusChanged = ev("run.status_changed", {
@@ -58,6 +59,7 @@ export const RunPlanned = ev("run.planned", {
       title: z.string(),
       declaredDeps: z.array(Id.TaskId),
       sourceIds: z.array(Id.SourceVersionId),
+      retryPolicy: RetryPolicy,
     }),
   ),
 });
@@ -104,7 +106,7 @@ export const SourceIngested = ev("source.ingested", {
   blobRef: z.string(),
   preview: Preview,
 });
-/** A new version of a fixture source was installed (e.g. by an arena attack card). Never names the actor. */
+/** A new version of a source was installed (e.g. by an arena attack card). Never names the actor. */
 export const SourceModified = ev("source.modified", {
   sourceVersionId: Id.SourceVersionId,
   previousVersionId: Id.SourceVersionId,

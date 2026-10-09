@@ -50,7 +50,7 @@ export interface ArtifactBroker {
   }): Promise<{ content: string | Uint8Array; classification: Classification }>;
   isUsable(versionId: string): Promise<boolean>;
   setTrust(versionId: string, state: SecurityState, incidentId?: string): Promise<void>;
-  /** Install a source version (fixture load or attack card). */
+  /** Install a source version (loaded from the workflow source location, or an attack payload). */
   ingestSource(input: {
     runId: string;
     name: string;
@@ -142,4 +142,12 @@ export interface RecoveryService {
   plan(incidentId: string, replacementSourceVersionId: string): Promise<RecoveryPlan>;
   /** Validates single-use, unexpired approval bound to the plan digest; then reruns + verifies. */
   approveAndRecover(input: { approvalId: string; planId: string; actionDigest: string; actorId: string }): Promise<void>;
+}
+
+// ── Workflow registry (Member 3) ───────────────────────────────────────────
+// Workflow definitions are data submitted via POST /api/workflows and stored in Postgres.
+export interface WorkflowRepository {
+  create(projectId: string, definition: import("./workflow").WorkflowDefinition): Promise<import("./workflow").Workflow>;
+  get(workflowId: string): Promise<import("./workflow").Workflow | null>;
+  list(projectId: string): Promise<import("./workflow").Workflow[]>;
 }

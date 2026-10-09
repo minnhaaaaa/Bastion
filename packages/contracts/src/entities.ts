@@ -46,7 +46,8 @@ export type AgentSpec = z.infer<typeof AgentSpec>;
 export const Run = z.object({
   id: Id.RunId,
   projectId: Id.ProjectId,
-  scenarioId: z.string(),
+  workflowId: Id.WorkflowId,
+  workflowVersion: z.number().int().min(1),
   /** Protected runs go through the policy gate; baseline runs are the labeled vulnerable comparison. */
   mode: z.enum(["PROTECTED", "BASELINE"]),
   status: RunStatus,

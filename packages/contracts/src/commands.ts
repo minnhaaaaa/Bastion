@@ -1,5 +1,6 @@
 import { z } from "zod";
 import * as Id from "./ids";
+import { WorkflowDefinition } from "./workflow";
 
 /**
  * REST command bodies (ARCHITECTURE §8). Every mutation carries a client-generated
@@ -8,10 +9,17 @@ import * as Id from "./ids";
  */
 const cmd = <S extends z.ZodRawShape>(shape: S) => z.object({ commandId: Id.CommandId, ...shape });
 
+// POST /api/workflows — register a workflow definition (stored in Postgres, versioned)
+export const CreateWorkflowCmd = cmd({
+  projectId: Id.ProjectId,
+  definition: WorkflowDefinition,
+});
+export type CreateWorkflowCmd = z.infer<typeof CreateWorkflowCmd>;
+
 // POST /api/runs
 export const CreateRunCmd = cmd({
-  scenarioId: z.string(),
-  mode: z.enum(["PROTECTED", "BASELINE"]).default("PROTECTED"),
+  workflowId: Id.WorkflowId,
+  mode: z.enum(["PROTECTED", "BASELINE"]),
 });
 export type CreateRunCmd = z.infer<typeof CreateRunCmd>;
 
@@ -39,7 +47,7 @@ export type ApproveRecoveryCmd = z.infer<typeof ApproveRecoveryCmd>;
 
 // POST /api/arena/rooms
 export const CreateRoomCmd = cmd({
-  scenarioId: z.string(),
+  workflowId: Id.WorkflowId,
 });
 export type CreateRoomCmd = z.infer<typeof CreateRoomCmd>;
 
@@ -70,13 +78,11 @@ export type RevealCmd = z.infer<typeof RevealCmd>;
 export const ArenaActionCmd = z.discriminatedUnion("card", [
   cmd({
     card: z.literal("POISON_DOCUMENT"),
-    /** Must be one of the scenario's attackable sources. */
-    targetSourceName: z.string(),
-    /** Pre-approved payload variant from scenario-kit, not free text. */
-    payloadVariant: z.string(),
+    /** id of an entry in the run's workflow `attackPayloads` (stored server-side), never free text. */
+    attackPayloadId: z.string(),
   }),
-  cmd({ card: z.literal("REDIRECT_TOOL"), targetSourceName: z.string(), payloadVariant: z.string() }),
-  cmd({ card: z.literal("LEAK_SECRET"), targetSourceName: z.string(), payloadVariant: z.string() }),
+  cmd({ card: z.literal("REDIRECT_TOOL"), attackPayloadId: z.string() }),
+  cmd({ card: z.literal("LEAK_SECRET"), attackPayloadId: z.string() }),
   cmd({ card: z.literal("INSPECT_SOURCE"), sourceVersionId: Id.SourceVersionId }),
   cmd({ card: z.literal("TRACE_DEPENDENCY"), fromId: z.string() }),
   cmd({ card: z.literal("REVIEW_TOOL_DECISION"), toolRequestId: Id.ToolRequestId }),

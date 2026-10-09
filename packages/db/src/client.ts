@@ -2,7 +2,8 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "./schema";
 
-export function createDb(url = process.env.DATABASE_URL ?? "postgres://splitbrain:splitbrain@localhost:5432/splitbrain") {
+/** The connection string is required configuration — there is no built-in default. */
+export function createDb(url: string) {
   const sql = postgres(url, { max: 10 });
   return { db: drizzle(sql, { schema }), sql };
 }
