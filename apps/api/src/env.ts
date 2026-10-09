@@ -9,6 +9,18 @@ const seconds = z.coerce.number().int().positive();
 const Env = z.object({
   API_PORT: z.coerce.number().int().positive(),
   WEB_ORIGIN: z.string().url(),
+  // Explicit extra trusted clients, e.g. packaged desktop origins. No wildcard CORS.
+  WEB_ADDITIONAL_ORIGINS: z.string().optional().transform((value, ctx) => {
+    const origins = value?.split(",").map(origin => origin.trim()).filter(Boolean) ?? [];
+    for (const origin of origins) {
+      try {
+        const url = new URL(origin);
+        if (url.username || url.password || url.search || url.hash || (url.pathname && url.pathname !== "/")) throw new Error();
+        if (!["http:", "https:", "tauri:"].includes(url.protocol)) throw new Error();
+      } catch { ctx.addIssue({ code: "custom", message: "expected explicit trusted client origins" }); }
+    }
+    return origins;
+  }),
   DATABASE_URL: z.string().url(),
   NEO4J_URI: z.string().min(1),
   NEO4J_USER: z.string().min(1),

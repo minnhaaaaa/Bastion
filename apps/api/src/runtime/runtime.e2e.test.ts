@@ -53,6 +53,10 @@ async function startWorker(env: Record<string, string>) {
 
 /** Scripted agent: reads inputs, obeys FETCH lines via the gateway, passes content downstream. */
 function scriptedAgent(context: Parameters<NonNullable<Parameters<typeof buildAgentRuntime>[0]["createAgent"]>>[0], gateway: Parameters<NonNullable<Parameters<typeof buildAgentRuntime>[0]["createAgent"]>>[1], httpTool: string): AgentRuntimeAdapter {
+  // Model context must retain the persisted identity and trust of every consumed input.
+  context.inputs.forEach((value, index) => {
+    expect(value).toEqual(expect.objectContaining({ versionId: context.inputVersionIds[index], name: expect.any(String), kind: expect.stringMatching(/^(source|artifact)$/), securityState: expect.any(String) }));
+  });
   const sinks = new Map<string, (e: RuntimeEvent) => void>();
   return {
     async startTask() {
@@ -77,7 +81,7 @@ function scriptedAgent(context: Parameters<NonNullable<Parameters<typeof buildAg
   };
 }
 
-async function setup(card: AttackCard = "POISON_DOCUMENT", opts: { approvalFetch?: boolean; approvalTtlSeconds?: number } = {}) {
+async function setup(card: AttackCard = "POISON_DOCUMENT", opts: { toolCheck?: "pass" | "fail" | "deny"; approvalFetch?: boolean; approvalTtlSeconds?: number } = {}) {
   const dir = await realpath(await mkdtemp(join(tmpdir(), "bastion-e2e-")));
   cleanups.push(() => rm(dir, { recursive: true, force: true }));
   const workspace = join(dir, "workspace");
@@ -111,13 +115,13 @@ async function setup(card: AttackCard = "POISON_DOCUMENT", opts: { approvalFetch
 
   const token = newSecret();
   const port = await freePort();
-  const toolOps = { [`read_${newId("trace").slice(-6)}`]: "fs.read", [`http_${newId("trace").slice(-6)}`]: "net.http" };
+  const toolOps = { ...(opts.toolCheck ? { [`exec_${newId("trace").slice(-6)}`]: "proc.exec" } : {}), [`read_${newId("trace").slice(-6)}`]: "fs.read", [`http_${newId("trace").slice(-6)}`]: "net.http" };
   const httpTool = Object.entries(toolOps).find(([, op]) => op === "net.http")![0];
   const auditFile = join(auditDir, "access.jsonl");
   await writeFile(auditFile, "");
   await startWorker({
     SANDBOX_ROOT: workspace, SANDBOX_AUDIT_PATH: auditFile, SANDBOX_TOKEN: token, SANDBOX_HTTP_ORIGINS: JSON.stringify([targetOrigin, approvalOrigin]),
-    SANDBOX_EXEC_COMMANDS: "[]", SANDBOX_TIMEOUT_MS: "3000", SANDBOX_MAX_BYTES: "65536", SANDBOX_PORT: String(port), SANDBOX_BIND_HOST: "127.0.0.1",
+    SANDBOX_EXEC_COMMANDS: JSON.stringify(opts.toolCheck ? ["/bin/true", "/bin/false"] : []), SANDBOX_TIMEOUT_MS: "3000", SANDBOX_MAX_BYTES: "65536", SANDBOX_PORT: String(port), SANDBOX_BIND_HOST: "127.0.0.1",
   });
 
   const { db, close } = await createTestDb();
@@ -127,7 +131,7 @@ async function setup(card: AttackCard = "POISON_DOCUMENT", opts: { approvalFetch
   const workflows = new PgWorkflowRepository(db);
   const broker = new PgArtifactBroker(journal, runs, new FsBlobStore(join(dir, "blobs")));
   const runtimeEnv = {
-      PI_PROVIDER: newId("trace"), PI_MODEL: newId("trace"), PI_BASE_URL: "http://127.0.0.1:9", PI_API_KEY: newId("trace"), PI_AGENT_DIR: dir, PI_TIMEOUT_MS: "5000",
+      PI_AUTH_MODE: "api-key", PI_PROVIDER: newId("trace"), PI_MODEL: newId("trace"), PI_BASE_URL: "http://127.0.0.1:9", PI_API_KEY: newId("trace"), PI_AGENT_DIR: dir, PI_TIMEOUT_MS: "5000",
       SCHEDULER_PARALLELISM: "2",
       SANDBOX_URL: `http://127.0.0.1:${port}`, SANDBOX_TOKEN: token, SANDBOX_WORKSPACE_PATH: workspace, SANDBOX_ROOT: workspace, SANDBOX_TIMEOUT_MS: "3000",
       SANDBOX_TOOL_OPERATIONS: JSON.stringify(toolOps), SANDBOX_HTTP_ORIGINS: JSON.stringify([targetOrigin, approvalOrigin]), SANDBOX_MAX_BYTES: "65536",
@@ -186,6 +190,13 @@ async function setup(card: AttackCard = "POISON_DOCUMENT", opts: { approvalFetch
     ],
     attackPayloads: [{ id: newId("trace"), card, targetSourceName: "doc", label: "inject", contentLocation: files.attack }],
   };
+  if (opts.toolCheck) {
+    const executable = opts.toolCheck === "fail" ? "/bin/false" : "/bin/true";
+    const resource = JSON.stringify([executable]);
+    definition.agents.find(agent => agent.id === verifier)!.capabilities.push(`proc.exec:${resource}`);
+    definition.policyRules.push({ id: newId("command"), description: "Test verification command", decision: opts.toolCheck === "deny" ? "DENY" : "ALLOW", operation: "proc.exec", resourcePattern: resource });
+    definition.acceptanceChecks = [{ kind: "TOOL", id: newId("command"), taskId: tV, tool: Object.entries(toolOps).find(([, op]) => op === "proc.exec")![0], args: { executable, argv: [] } }];
+  }
   const project = await new ProjectRepository(db).create(userId, "e2e");
   const wf = await workflows.create(project.id, definition);
   // A later edit must not affect runs pinned to v1 (bug fix #1).
@@ -457,4 +468,20 @@ describe("tool approvals (REQUIRE_APPROVAL) end to end", () => {
     expect((await t.journal.snapshot(runId))!.toolApprovals[a.id]!.status).toBe("EXPIRED");
     expect(t.approvalHits).toEqual([]);
   }, 30_000);
+});
+
+
+describe("controller-owned tool acceptance checks", () => {
+  it.each(["pass", "fail", "deny"] as const)("%s: uses real sandbox exit status and gateway decisions", async toolCheck => {
+    const t = await setup("POISON_DOCUMENT", { toolCheck });
+    const { runId, done } = await t.start("PROTECTED", false);
+    await done;
+    const snapshot = (await t.journal.snapshot(runId))!;
+    expect(latestExecution(snapshot, t.ids.tV)!.state).toBe(toolCheck === "pass" ? "SUCCEEDED" : "FAILED");
+    const request = Object.values(snapshot.toolRequests).find(request => request.operation === "proc.exec")!;
+    expect(request.executionOutcome).toBe(toolCheck === "pass" ? "SUCCESS" : toolCheck === "fail" ? "ERROR" : "NOT_EXECUTED");
+    const checks = await t.runtime.verifier.verify(runId, newId("plan"));
+    expect(checks.find(check => check.name.startsWith("acceptance.tool:"))?.passed).toBe(toolCheck === "pass");
+    expect((await readFile(t.auditFile, "utf8")).includes("proc.exec")).toBe(toolCheck !== "deny");
+  }, 30000);
 });

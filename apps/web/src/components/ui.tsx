@@ -1,10 +1,9 @@
-import { useEffect, useState, type ReactNode } from "react";
-import { Emblem } from "./brand/Emblem";
-import { SiteFooter, SiteHeader } from "./site/SiteHeader";
+import KbdInputGroup from "./ui/kbd-input-group";
+import { KeyRound } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Masthead } from "./wenvy/Masthead";
 import { useSession } from "../lib/session";
-export function Mark({ className = "" }: { className?: string }) {
-  return <Emblem className={className} />;
-}
+import { api, ApiRequestError } from "../lib/api";
 export function Arrow({ diagonal = false }: { diagonal?: boolean }) {
   return <span aria-hidden="true">{diagonal ? "↗" : "→"}</span>;
 }
@@ -42,7 +41,6 @@ export function ErrorBox({ error }: { error: unknown }) {
 export function Empty({ title }: { title: string; children?: ReactNode }) {
   return (
     <div className="empty">
-      <Mark />
       <h3>{title}</h3>
     </div>
   );
@@ -60,37 +58,72 @@ export function useReducedMotion() {
   return reduced;
 }
 export function Header({ active = "" }: { active?: string }) {
-  return <SiteHeader active={active} />;
+  return <Masthead active={active} />;
 }
 export function Footer() {
-  return <SiteFooter />;
+  return (
+    <footer className="foot">
+      <a href="/" className="foot__mark">
+        bastion
+      </a>
+      <span className="foot__note">trace · contain · recover</span>
+      <a href="/architecture">architecture ↗</a>
+    </footer>
+  );
 }
 export function Connect() {
   const { setToken } = useSession();
   const [value, setValue] = useState("");
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  const request = useRef<AbortController | null>(null);
+  useEffect(() => () => request.current?.abort(), []);
   return (
     <div className="connect-panel">
-      <span className="eyebrow">Operator access</span>
-      <h2>
-        Raise the <em>gate.</em>
-      </h2>
+      <span className="eyebrow">OPERATOR ACCESS</span>
+      <h2>Connect.</h2>
       <form
-        onSubmit={(event) => {
+        aria-busy={pending}
+        onSubmit={async (event) => {
           event.preventDefault();
-          if (value.trim()) setToken(value.trim());
+          const candidate = value.trim();
+          if (!candidate || request.current) return;
+          const controller = new AbortController();
+          request.current = controller;
+          setPending(true);
+          setError(null);
+          try {
+            // This endpoint requires an operator, so host/player tokens cannot open the workspace.
+            await api("/api/projects", candidate, undefined, controller.signal);
+            if (!controller.signal.aborted) setToken(candidate);
+          } catch (failure) {
+            if (!controller.signal.aborted) setError(
+              failure instanceof ApiRequestError && [401, 403].includes(failure.status)
+                ? new Error("Operator token not accepted.")
+                : failure instanceof ApiRequestError ? failure : new Error("Cannot reach Bastion. Check the controller connection."),
+            );
+          } finally {
+            request.current = null;
+            if (!controller.signal.aborted) setPending(false);
+          }
         }}
       >
         <label htmlFor="operator-token">Operator token</label>
-        <input
+        <KbdInputGroup
+          icon={<KeyRound />}
           id="operator-token"
           type="password"
           value={value}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={(e) => { setValue(e.target.value); setError(null); }}
+          disabled={pending}
+          aria-invalid={!!error}
+          aria-describedby={error ? "connect-error" : undefined}
           required
           autoComplete="off"
         />
-        <Button type="submit">
-          Enter console <Arrow />
+        <div id="connect-error"><ErrorBox error={error} /></div>
+        <Button type="submit" disabled={pending || !value.trim()}>
+          {pending ? "Connecting…" : "Open workspace"} <Arrow />
         </Button>
       </form>
     </div>

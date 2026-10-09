@@ -15,9 +15,10 @@ import { attachSockets } from "./sockets";
 /**
  * Fastify + Socket.IO control plane. Every response is derived from persisted state.
  */
-export async function buildServer(deps: AppDeps, opts: { webOrigin: string; logLevel: string }) {
+export async function buildServer(deps: AppDeps, opts: { webOrigin: string; additionalOrigins?: string[]; logLevel: string }) {
   const app = Fastify({ logger: { level: opts.logLevel } });
-  await app.register(cors, { origin: opts.webOrigin });
+  const trustedOrigins = [opts.webOrigin, ...(opts.additionalOrigins ?? [])];
+  await app.register(cors, { origin: trustedOrigins });
   app.setErrorHandler(errorHandler);
   await app.register(rateLimit, {
     global: false,
@@ -30,6 +31,7 @@ export async function buildServer(deps: AppDeps, opts: { webOrigin: string; logL
     startedAt,
     now: new Date().toISOString(),
     runtimeConnected: Boolean(deps.launcher),
+    taskPlanningConnected: Boolean(deps.taskPlanner),
     graphConnected: Boolean(deps.graph),
   }));
 
@@ -43,7 +45,7 @@ export async function buildServer(deps: AppDeps, opts: { webOrigin: string; logL
   arenaRoutes(app, deps, { auth, access, idem, arena });
 
   const io = new Server<ClientToServerEvents, ServerToClientEvents, Record<string, never>, { actor: Actor }>(app.server, {
-    cors: { origin: opts.webOrigin },
+    cors: { origin: trustedOrigins },
   });
   attachSockets(io, deps, { auth, access, arena });
   await arena.resumeAll();

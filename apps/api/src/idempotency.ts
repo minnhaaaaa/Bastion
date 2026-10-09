@@ -8,7 +8,7 @@ import { HttpError } from "./errors";
  * Failed commands are not stored, so the client may retry them.
  */
 export class Idempotency {
-  private readonly inflight = new Map<string, Promise<{ status: number; body: unknown }>>();
+  private readonly inflight = new Map<string, { actorId: string; route: string; result: Promise<{ status: number; body: unknown }> }>();
   constructor(private readonly store: CommandStore) {}
 
   async run(
@@ -22,16 +22,19 @@ export class Idempotency {
         throw new HttpError("CONFLICT", "commandId already used for a different command");
       return reply.status(existing.status).header("idempotent-replay", "true").send(existing.body);
     }
-    let p = this.inflight.get(key.commandId);
-    if (!p) {
-      p = fn().then(async (r) => {
+    let pending = this.inflight.get(key.commandId);
+    if (pending && (pending.actorId !== key.actorId || pending.route !== key.route))
+      throw new HttpError("CONFLICT", "commandId already used for a different command");
+    if (!pending) {
+      const result = fn().then(async (r) => {
         await this.store.put(key.commandId, key.actorId, key.route, r);
         return r;
       });
-      this.inflight.set(key.commandId, p);
-      p.finally(() => this.inflight.delete(key.commandId)).catch(() => undefined);
+      pending = { actorId: key.actorId, route: key.route, result };
+      this.inflight.set(key.commandId, pending);
+      result.finally(() => this.inflight.delete(key.commandId)).catch(() => undefined);
     }
-    const r = await p;
+    const r = await pending.result;
     return reply.status(r.status).send(r.body);
   }
 }

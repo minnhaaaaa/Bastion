@@ -25,6 +25,8 @@ import { HttpError, forbidden, notFound } from "./errors";
 
 /** Everything the HTTP/socket layer needs. Built by the composition root (index.ts) or tests. */
 export interface AppDeps {
+  repositoryConnector?: import("./repository-access").RepositoryConnector;
+  taskPlanner?: import("./task-planning").TaskPlanner;
   db: Db;
   journal: PgEventJournal;
   broker: PgArtifactBroker;

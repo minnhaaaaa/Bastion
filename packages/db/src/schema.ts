@@ -5,6 +5,7 @@
  */
 import {
   boolean,
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -47,6 +48,12 @@ export const projects = pgTable("projects", {
   policySetId: text("policy_set_id"),
   createdAt: ts("created_at").notNull().defaultNow(),
 });
+
+export const projectConnections = pgTable("project_connections", {
+  projectId: text("project_id").primaryKey(),
+  repository: jsonb("repository").$type<unknown>(),
+  updatedAt: ts("updated_at").notNull().defaultNow(),
+}, table => [foreignKey({ name: "project_connections_project_id_fkey", columns: [table.projectId], foreignColumns: [projects.id] })]);
 
 export const agentSpecs = pgTable("agent_specs", {
   id: text("id").primaryKey(),

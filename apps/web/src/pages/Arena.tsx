@@ -1,8 +1,11 @@
+import { DataSelect } from "../components/ui/data-select";
+import KbdInputGroup from "../components/ui/kbd-input-group";
+import { DoorOpen, Workflow as WorkflowIcon, User, Hash } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { io, type Socket } from "socket.io-client";
 import QRCode from "qrcode";
-import barba from "@barba/core";
+import { navigate } from "../lib/navigation";
 import {
   newId,
   type CreateRoomResult,
@@ -15,7 +18,7 @@ import {
   type ServerToClientEvents,
   type ClientToServerEvents,
 } from "@bastion/contracts";
-import { Watchtower } from "../components/brand/Watchtower";
+import SliceBlade from "../components/originkit/ui/slice-blade";
 import {
   Arrow,
   Button,
@@ -23,12 +26,12 @@ import {
   Empty,
   ErrorBox,
   Header,
+  useReducedMotion,
 } from "../components/ui";
 import { RunGraph } from "../components/RunGraph";
 import { api } from "../lib/api";
 import { env } from "../env";
 import { useSession } from "../lib/session";
-import { usePageIntro } from "../lib/usePageIntro";
 import { useRun } from "../lib/useRun";
 type RoomSession = {
   token: string;
@@ -38,7 +41,7 @@ type RoomSession = {
 const sessions = new Map<string, RoomSession>();
 type PublicRoom = ArenaPhaseUpdate & { presence: RoomPresence };
 export function Arena({ roomId }: { roomId?: string }) {
-  const intro = usePageIntro<HTMLElement>(".arena-heading > *, .arena-entry > *, .host-setup, .round-bar, .room-join, .host-panel, .connect-panel");
+  const reduced = useReducedMotion();
   const { token } = useSession();
   const [session, setSession] = useState(
     roomId ? sessions.get(roomId) : undefined,
@@ -155,7 +158,7 @@ export function Arena({ roomId }: { roomId?: string }) {
         kind: "host",
         joinCode: data.joinCode,
       });
-      barba.go(`/arena/${data.roomId}`);
+      navigate(`/arena/${data.roomId}`);
     });
   }
   function join(e: FormEvent<HTMLFormElement>) {
@@ -200,7 +203,7 @@ export function Arena({ roomId }: { roomId?: string }) {
   return (
     <>
       <Header active="arena" />
-      <main ref={intro} id="main" tabIndex={-1} className="arena-page container">
+      <main id="main" tabIndex={-1} className="arena-page container">
         <div className="arena-heading">
           <div>
             <span className="eyebrow">BASTION / ARENA</span>
@@ -236,12 +239,13 @@ export function Arena({ roomId }: { roomId?: string }) {
                     e.preventDefault();
                     const data = new FormData(e.currentTarget);
                     const id = String(data.get("roomId")).trim();
-                    if (id) barba.go(`/arena/${encodeURIComponent(id)}`);
+                    if (id) navigate(`/arena/${encodeURIComponent(id)}`);
                   }}
                 >
                   <label htmlFor="room-id">Room ID</label>
                   <div className="inline-form">
-                    <input
+                    <KbdInputGroup
+                      icon={<DoorOpen />}
                       id="room-id"
                       name="roomId"
                       required
@@ -254,8 +258,23 @@ export function Arena({ roomId }: { roomId?: string }) {
                 </form>
               </div>
               <div className="slice-panel">
-                <span className="eyebrow">Sentry</span>
-                <Watchtower />
+                <span className="eyebrow">WARM-UP</span>
+                {reduced ? (
+                  <div className="slice-still">ARENA</div>
+                ) : (
+                  <SliceBlade
+                    title="BASTION"
+                    ink="#f3e7cf"
+                    accent="#780000"
+                    background="#0c0a07"
+                    style={{
+                      minWidth: 0,
+                      minHeight: 0,
+                      width: "100%",
+                      height: 340,
+                    }}
+                  />
+                )}
               </div>
             </div>
             <section className="host-setup">
@@ -267,7 +286,8 @@ export function Arena({ roomId }: { roomId?: string }) {
                   <h2>Host a round.</h2>
                   <label htmlFor="host-workflow">Workflow ID</label>
                   <div className="inline-form">
-                    <input
+                    <KbdInputGroup
+                      icon={<WorkflowIcon />}
                       id="host-workflow"
                       name="workflowId"
                       required
@@ -320,11 +340,12 @@ export function Arena({ roomId }: { roomId?: string }) {
                 <div className="workspace-controls">
                   <label>
                     Display alias
-                    <input name="alias" required maxLength={24} />
+                    <KbdInputGroup icon={<User />} name="alias" required maxLength={24} />
                   </label>
                   <label>
                     Join code
-                    <input
+                    <KbdInputGroup
+                      icon={<Hash />}
                       name="joinCode"
                       required
                       minLength={4}
@@ -605,9 +626,10 @@ function ActionCard({
       <h3>{card.toLowerCase().replaceAll("_", " ")}</h3>
       <label>
         Target
-        <select
+        <DataSelect
+          aria-label="Target"
           value={target}
-          onChange={(e) => setTarget(e.target.value)}
+          onValueChange={(value) => setTarget(value)}
           disabled={used}
         >
           <option value="">Select target</option>
@@ -616,7 +638,7 @@ function ActionCard({
               {c.label}
             </option>
           ))}
-        </select>
+        </DataSelect>
       </label>
       {plan && (
         <div className="plan-preview">

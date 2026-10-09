@@ -13,3 +13,6 @@ test-results/
 .runtime-traces/
 .runtime-experiments/
 .data/
+
+apps/web/src-tauri/target/
+apps/web/src-tauri/desktop.generated.json

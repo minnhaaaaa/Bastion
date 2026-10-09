@@ -1,3 +1,5 @@
+import { repositoryConnector } from "../repository-access";
+import { createTaskPlanner } from "../task-planning";
 import { join, relative } from "node:path";
 import {
   WorkflowDefinition,
@@ -13,13 +15,14 @@ import { ProjectRepository, RunRepository, type Db, type PgEventJournal, type Pg
 import type { PgArtifactBroker } from "@bastion/provenance";
 import { WorkflowScheduler, schedulerParallelismFromEnv, type ExecutionContext } from "@bastion/orchestrator";
 import { ExecutionFence } from "@bastion/runtime-adapter";
-import { piConfigFromEnv, piRuntimeForExecution, type GatewayTool } from "@bastion/runtime-pi";
+import { piConfigFromEnv, piModelRegistry, piRuntimeForExecution, type GatewayTool } from "@bastion/runtime-pi";
 import { PolicyToolGateway, SandboxClient, ToolApprovalService, WorkflowPolicyEngine, sandboxConfigFromEnv, type DispatchContext } from "@bastion/security";
 import { PgToolApprovalStore, ToolApprovalCoordinator } from "../toolApprovals";
 import { WorkflowRunner } from "@bastion/scenario-kit";
 import { sandboxLoader } from "./loader";
 import { gatewayToolsFor } from "./tools";
 import { SandboxTargetAudit, verifyRun } from "./verification";
+import { executeToolChecks } from "./tool-checks";
 
 const RANK: Record<Classification, number> = { PUBLIC: 0, INTERNAL: 1, SYNTHETIC_SECRET: 2 };
 
@@ -47,6 +50,7 @@ export function buildAgentRuntime(input: {
 }) {
   const { env, journal, broker, workflows } = input;
   const pi = piConfigFromEnv(env);
+  if (!input.createAgent) piModelRegistry(pi);
   const sandbox = sandboxConfigFromEnv(env);
   const parallelism = schedulerParallelismFromEnv(env);
   const httpOrigins = JSON.parse(required(env, "SANDBOX_HTTP_ORIGINS")) as string[];
@@ -142,8 +146,22 @@ export function buildAgentRuntime(input: {
     workflowForRun: definitionFor,
     workspaceForRun: async () => sandbox.workerRoot,
     withExecutionFence: (id, op) => fence.run(id, op),
-    runtime: async (context) =>
-      input.createAgent ? input.createAgent(context, gateway, tools) : piRuntimeForExecution({ context, cwd: sandbox.hostRoot, config: pi, tools, gateway }),
+    verifyExecution: async context => executeToolChecks(context, (await definitionFor(context.runId)).acceptanceChecks?.filter(check => check.kind === "TOOL").filter(check => check.taskId === context.task.id) ?? [], gateway, journal),
+    runtime: async (context) => {
+      const evidence = await snapshot(context.runId);
+      const inputs = context.inputs.map((value, index) => {
+        const versionId = context.inputVersionIds[index]!;
+        const source = evidence.sources[versionId];
+        const artifact = evidence.artifacts[versionId];
+        if (!source && !artifact) throw new Error("Input version is missing from provenance");
+        return { ...value, versionId, name: (source ?? artifact)!.name,
+          kind: source ? "source" as const : "artifact" as const,
+          ...(source ? { declaredTrust: source.trust } : {}),
+          securityState: source?.securityState ?? artifact!.trustState };
+      });
+      const enriched = { ...context, inputs };
+      return input.createAgent ? input.createAgent(enriched, gateway, tools) : piRuntimeForExecution({ context: enriched, cwd: sandbox.hostRoot, config: pi, tools, gateway });
+    },
   });
 
   const audit: TargetAudit = new SandboxTargetAudit(auditFile, snapshot, definitionFor);
@@ -172,5 +190,5 @@ export function buildAgentRuntime(input: {
     verify: async (runId) => verifyRun(await snapshot(runId), audit, { definition: await definitionFor(runId), journal, content: (r, v) => broker.content(r, v) }),
   };
 
-  return { launcher, scheduler, verifier, audit, fence, gateway, toolApprovals, info: { provider: pi.provider, model: pi.model, timeoutMs: pi.timeoutMs } };
+  return { repositoryConnector: env.REPOSITORY_GIT_EXECUTABLE ? repositoryConnector({ hostRoot: sandbox.hostRoot, workerRoot: sandbox.workerRoot, gitExecutable: env.REPOSITORY_GIT_EXECUTABLE, timeoutMs: sandbox.timeoutMs, maxBytes, toolOperations: sandbox.toolOperations }) : undefined, taskPlanner: createTaskPlanner(pi, sandbox.hostRoot), launcher, scheduler, verifier, audit, fence, gateway, toolApprovals, info: { provider: pi.provider, model: pi.model, timeoutMs: pi.timeoutMs } };
 }

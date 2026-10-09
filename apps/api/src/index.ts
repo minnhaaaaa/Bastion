@@ -51,6 +51,8 @@ const { app } = await buildServer(
     runs,
     commands: new CommandStore(pg.db),
     launcher: runtime?.launcher,
+    taskPlanner: runtime?.taskPlanner,
+    repositoryConnector: runtime?.repositoryConnector,
     runtimeInfo: runtime?.info,
     toolApprovals: runtime?.toolApprovals,
     audit: runtime?.audit,
@@ -66,7 +68,7 @@ const { app } = await buildServer(
       actionRatePerMinute: env.ARENA_ACTION_RATE_PER_MINUTE,
     },
   },
-  { webOrigin: env.WEB_ORIGIN, logLevel: env.LOG_LEVEL },
+  { webOrigin: env.WEB_ORIGIN, additionalOrigins: env.WEB_ADDITIONAL_ORIGINS, logLevel: env.LOG_LEVEL },
 );
 
 // Close out work that was in flight before this process started (listeners are attached now).

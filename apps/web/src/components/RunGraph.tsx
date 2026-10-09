@@ -68,7 +68,7 @@ export function RunGraph({
       ...edge,
       label: edge.relation,
       markerEnd: { type: MarkerType.ArrowClosed },
-      style: { stroke: "rgba(237, 230, 225, 0.38)" },
+      style: { stroke: "#c9b48b" },
     }));
     return { nodes, edges };
   }, [snapshot]);
@@ -90,7 +90,7 @@ export function RunGraph({
       colorMode="dark"
       minZoom={0.15}
     >
-      <Background color="#2c1d21" gap={32} />
+      <Background color="#30281d" gap={28} />
       <Controls showInteractive={false} />
     </ReactFlow>
   );

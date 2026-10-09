@@ -11,7 +11,7 @@ import { newSecret } from "./auth";
 import { buildServer } from "./server";
 
 export async function createTestApp(
-  opts: { launcher?: RunLauncher; audit?: TargetAudit; briefingMs?: number; attackWindowMs?: number; reconnectGraceMs?: number; roomTtlMs?: number; joinRatePerMinute?: number } = {},
+  opts: { repositoryConnector?: import("./repository-access").RepositoryConnector; taskPlanner?: import("./task-planning").TaskPlanner; launcher?: RunLauncher; audit?: TargetAudit; briefingMs?: number; attackWindowMs?: number; reconnectGraceMs?: number; roomTtlMs?: number; joinRatePerMinute?: number; additionalOrigins?: string[] } = {},
 ) {
   const { db, close } = await createTestDb();
   const dir = await mkdtemp(join(tmpdir(), "bastion-api-"));
@@ -36,6 +36,8 @@ export async function createTestApp(
       runs,
       commands: new CommandStore(db),
       launcher: opts.launcher,
+      taskPlanner: opts.taskPlanner,
+      repositoryConnector: opts.repositoryConnector,
       audit: opts.audit,
       operators: new Map([
         [tokenA, userA],
@@ -51,7 +53,7 @@ export async function createTestApp(
         actionRatePerMinute: 1000,
       },
     },
-    { webOrigin: "http://test.invalid", logLevel: "silent" },
+    { webOrigin: "http://test.invalid", additionalOrigins: opts.additionalOrigins, logLevel: "silent" },
   );
   return {
     app,

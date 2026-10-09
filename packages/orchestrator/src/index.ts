@@ -25,6 +25,8 @@ export class WorkflowScheduler implements Scheduler {
     /** Must return the run's PINNED definition, not the registry's latest version. */
     workflowForRun(runId: string): Promise<WorkflowDefinition>;
     runtime(context: ExecutionContext): Promise<AgentRuntimeAdapter>;
+    /** Controller-owned checks, after model completion and before publishing success. */
+    verifyExecution?(context: ExecutionContext): Promise<boolean>;
     workspaceForRun(runId: string): Promise<string>;
     withExecutionFence<T>(executionId: string, operation: () => Promise<T>): Promise<T>;
   }) {
@@ -174,7 +176,8 @@ export class WorkflowScheduler implements Scheduler {
       const inputs = await Promise.all(inputVersionIds.map(id => this.options.broker.consume({ runId, inputVersionId: id, consumerExecutionId: a.executionId, consumerTaskId: a.task.id, traceId })));
       const declared = work.definition.tasks.find(t => t.id === a.task.id)!;
       const agent = work.definition.agents.find(agent => agent.id === a.task.agentId)!;
-      a.runtime = await this.options.runtime({ runId, task: a.task, executionId: a.executionId, traceId, inputVersionIds, inputs, produces: declared.produces, capabilities: agent.capabilities });
+      const context = { runId, task: a.task, executionId: a.executionId, traceId, inputVersionIds, inputs, produces: declared.produces, capabilities: agent.capabilities };
+      a.runtime = await this.options.runtime(context);
       const { sessionId } = await a.runtime.startTask({ runId, taskId: a.task.id, agentId: a.task.agentId, inputArtifactIds: inputVersionIds, capabilities: agent.capabilities, workspaceId: await this.options.workspaceForRun(runId) });
       a.sessionId = sessionId;
       await this.options.journal.append(runId, [{ ...envelope, type: "agent.session_started", payload: { agentId: a.task.agentId, role: a.task.role, executionId: a.executionId, sessionId } }]);
@@ -185,6 +188,9 @@ export class WorkflowScheduler implements Scheduler {
       if (a.held) await a.runtime.requestStop(sessionId);
       const result = await finish;
       reason = a.held ? "STOPPED" : result.error === "TIMEOUT" ? "TIMEOUT" : result.ok ? "COMPLETED" : "ERROR";
+      if (!a.held && result.ok && outputs.length === 1 && outputs[0]!.name === declared.produces && work.definition.acceptanceChecks?.some(check => check.kind === "TOOL" && check.taskId === a.task.id)) {
+        if (!this.options.verifyExecution || !await this.options.verifyExecution(context)) throw new Error("Tool acceptance checks failed");
+      }
       await this.options.withExecutionFence(a.executionId, async () => {
         if (a.held) return;
         if (!result.ok || outputs.length !== 1 || outputs[0]!.name !== declared.produces) throw new Error("Runtime did not produce the declared output");

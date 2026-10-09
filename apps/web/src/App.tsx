@@ -1,5 +1,5 @@
-import { Landing } from "./pages/Landing";
 import { lazy, Suspense } from "react";
+const Landing = lazy(() => import("./pages/Landing").then(m => ({ default: m.Landing })));
 const Architecture = lazy(() =>
   import("./pages/Architecture").then((m) => ({ default: m.Architecture })),
 );

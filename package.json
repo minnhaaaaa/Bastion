@@ -13,7 +13,13 @@
     "db:migrate": "pnpm --filter @bastion/db migrate",
     "workflow:validate": "pnpm --filter @bastion/api exec tsx src/cli/workflow.ts validate",
     "workflow:submit": "pnpm --filter @bastion/api exec tsx src/cli/workflow.ts submit",
-    "workflow:project": "pnpm --filter @bastion/api exec tsx src/cli/workflow.ts project"
+    "workflow:project": "pnpm --filter @bastion/api exec tsx src/cli/workflow.ts project",
+    "agent:login": "pnpm --filter @bastion/api exec tsx src/cli/agent.ts login",
+    "agent:models": "pnpm --filter @bastion/api exec tsx src/cli/agent.ts models",
+    "config:check": "pnpm --filter @bastion/api exec tsx src/cli/check-env.ts",
+    "desktop:dev": "node apps/web/scripts/desktop.mjs dev",
+    "desktop:build": "node apps/web/scripts/desktop.mjs build",
+    "desktop:info": "node apps/web/scripts/desktop.mjs info"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

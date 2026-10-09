@@ -1,3 +1,4 @@
+import { providerFailureCode } from "./provider-failure";
 /**
  * @bastion/runtime-pi — owner: Member 2
  * Pi-backed AgentRuntimeAdapter. All file/network/process tools must route through ToolGateway.
@@ -7,6 +8,8 @@ import { AuthStorage, DefaultResourceLoader, ModelRegistry, SessionManager, Sett
 import type { AgentSession, ToolDefinition } from "@mariozechner/pi-coding-agent";
 import type { TSchema } from "@sinclair/typebox";
 import type { AgentRunRequest, AgentRuntimeAdapter, RuntimeEvent, ToolCall, ToolGateway } from "@bastion/contracts";
+import { existsSync } from "node:fs";
+import { isAbsolute } from "node:path";
 import { privatePiTraceWriter, type PiTraceRecord } from "./trace";
 export { privatePiTraceWriter } from "./trace";
 export type { PiTraceRecord } from "./trace";
@@ -17,9 +20,14 @@ export type PiTaskContext = {
   traceId: string;
   cwd: string;
   prompt: string;
+  systemPrompt?: string;
   outputName: string;
 };
-export type PiConfig = { provider: string; model: string; baseUrl: string; apiKey: string; agentDir: string; timeoutMs: number; traceDirectory?: string };
+type PiConnection = { provider: string; model: string; baseUrl: string; agentDir: string; timeoutMs: number; traceDirectory?: string };
+export type PiConfig = PiConnection & (
+  | { authMode: "api-key"; apiKey: string }
+  | { authMode: "oauth"; authFile: string }
+);
 export function piConfigFromEnv(env: NodeJS.ProcessEnv = process.env): PiConfig {
   const required = (key: string) => { const value = env[key]; if (!value?.trim()) throw new Error(`Missing ${key}`); return value; };
   const timeoutMs = Number(required("PI_TIMEOUT_MS"));
@@ -27,7 +35,62 @@ export function piConfigFromEnv(env: NodeJS.ProcessEnv = process.env): PiConfig 
   const baseUrl = required("PI_BASE_URL");
   const url = new URL(baseUrl);
   if (!["https:", "http:"].includes(url.protocol) || url.username || url.password) throw new Error("Invalid PI_BASE_URL");
-  return { provider: required("PI_PROVIDER"), model: required("PI_MODEL"), baseUrl, apiKey: required("PI_API_KEY"), agentDir: required("PI_AGENT_DIR"), timeoutMs, ...(env.PI_TRACE_DIRECTORY?.trim() ? { traceDirectory: env.PI_TRACE_DIRECTORY } : {}) };
+  const connection = { provider: required("PI_PROVIDER"), model: required("PI_MODEL"), baseUrl, agentDir: required("PI_AGENT_DIR"), timeoutMs, ...(env.PI_TRACE_DIRECTORY?.trim() ? { traceDirectory: env.PI_TRACE_DIRECTORY } : {}) };
+  const authMode = required("PI_AUTH_MODE");
+  if (authMode === "api-key") {
+    if (connection.provider === "openai-codex") throw new Error("openai-codex requires PI_AUTH_MODE=oauth");
+    return { ...connection, authMode, apiKey: required("PI_API_KEY") };
+  }
+  if (authMode === "oauth") {
+    // Only the Codex subscription path is supported here. Claude uses an explicit API key.
+    if (connection.provider !== "openai-codex") throw new Error("OAuth mode requires PI_PROVIDER=openai-codex; Claude/OpenRouter use api-key mode");
+    const authFile = required("PI_AUTH_FILE");
+    if (!isAbsolute(authFile)) throw new Error("PI_AUTH_FILE must be an absolute path");
+    return { ...connection, authMode, authFile };
+  }
+  throw new Error("PI_AUTH_MODE must be api-key or oauth");
+}
+
+/** Explicit credentials only: never silently use another account or provider environment key. */
+export function piAuthStorage(config: PiConfig): AuthStorage {
+  if (config.authMode === "api-key") {
+    const auth = AuthStorage.inMemory();
+    auth.setRuntimeApiKey(config.provider, config.apiKey);
+    return auth;
+  }
+  if (!existsSync(config.authFile)) throw new Error("Codex login missing; run pnpm agent:login");
+  const auth = AuthStorage.create(config.authFile);
+  const credential = auth.get(config.provider);
+  if (auth.drainErrors().length || credential?.type !== "oauth" || !credential.access || !credential.refresh || !Number.isFinite(credential.expires)) {
+    throw new Error("Invalid Codex login; run pnpm agent:login");
+  }
+  return auth;
+}
+
+export function piModelRegistry(config: PiConfig) {
+  const authStorage = piAuthStorage(config);
+  // Empty path prevents models.json loading and command-based credential resolvers.
+  const modelRegistry = ModelRegistry.create(authStorage, "");
+  const model = modelRegistry.find(config.provider, config.model);
+  if (!model) throw new Error("Configured Pi model does not exist; run pnpm agent:models");
+  // A subscription token must never be sent to an arbitrary configured endpoint.
+  if (config.authMode === "oauth" && config.baseUrl.replace(/\/$/, "") !== model.baseUrl.replace(/\/$/, "")) {
+    throw new Error("PI_BASE_URL must match the installed Codex provider endpoint; run pnpm agent:models");
+  }
+  return { authStorage, modelRegistry, model: { ...model, baseUrl: config.baseUrl } };
+}
+
+export function piProviderModels(provider: string) {
+  return ModelRegistry.create(AuthStorage.inMemory(), "").getAll()
+    .filter(model => model.provider === provider)
+    .map(({ id, baseUrl }) => ({ id, baseUrl }));
+}
+
+export async function loginCodex(authFile: string, callbacks: Parameters<AuthStorage["login"]>[1]) {
+  if (!isAbsolute(authFile)) throw new Error("Set PI_AUTH_FILE to an absolute credentials-file path");
+  const auth = AuthStorage.create(authFile);
+  await auth.login("openai-codex", callbacks);
+  if (auth.drainErrors().length || auth.get("openai-codex")?.type !== "oauth") throw new Error("Credentials could not be saved");
 }
 
 export function gatewayTools(tools: GatewayTool[], gateway: ToolGateway, identity: Omit<ToolCall, "tool" | "args">): ToolDefinition[] {
@@ -53,14 +116,10 @@ export class PiRuntimeAdapter implements AgentRuntimeAdapter {
   async startTask(req: AgentRunRequest): Promise<{ sessionId: string }> {
     const context = await this.options.taskContext(req);
     const { config } = this.options;
-    const authStorage = AuthStorage.inMemory();
-    authStorage.setRuntimeApiKey(config.provider, config.apiKey);
-    // Empty path disables models.json loading, including command-based credential resolvers.
-    const modelRegistry = ModelRegistry.create(authStorage, "");
-    const model = modelRegistry.find(config.provider, config.model);
-    if (!model) throw new Error("Configured Pi model does not exist");
+    const { authStorage, modelRegistry, model } = piModelRegistry(config);
     const settingsManager = SettingsManager.inMemory({ compaction: { enabled: false }, retry: { enabled: false }, enableInstallTelemetry: false });
     const resourceLoader = new DefaultResourceLoader({ cwd: context.cwd, agentDir: config.agentDir, settingsManager,
+      ...(context.systemPrompt ? { systemPromptOverride: () => context.systemPrompt } : {}),
       noExtensions: true, noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true });
     await resourceLoader.reload();
     const tools = gatewayTools(this.options.tools, this.options.gateway, {
@@ -90,6 +149,7 @@ export class PiRuntimeAdapter implements AgentRuntimeAdapter {
     let timedOut = false;
     let text = "";
     let failed = false;
+    let providerFailure = "ERROR";
     const started = performance.now();
     const trace = this.options.trace ?? (this.options.config.traceDirectory ? privatePiTraceWriter(this.options.config.traceDirectory) : undefined);
     let traces = Promise.resolve();
@@ -101,7 +161,7 @@ export class PiRuntimeAdapter implements AgentRuntimeAdapter {
     const unsubscribe = live.session.subscribe(event => {
       if (event.type === "tool_execution_start" || event.type === "tool_execution_end") record("tool", event);
       if (event.type === "message_end" && event.message.role === "assistant") {
-        if (event.message.stopReason === "error" || event.message.stopReason === "aborted") failed = true;
+        if (event.message.stopReason === "error" || event.message.stopReason === "aborted") { failed = true; providerFailure = providerFailureCode(event.message.errorMessage); }
         text = event.message.content.filter(c => c.type === "text").map(c => c.text).join("\n");
       }
     });
@@ -119,7 +179,7 @@ export class PiRuntimeAdapter implements AgentRuntimeAdapter {
     } catch {
       record("completed", { ok: false, elapsedMs: performance.now() - started, statistics: live.session.getSessionStats() });
       await traces.catch(() => {});
-      emit({ kind: "finished", ok: false, error: timedOut ? "TIMEOUT" : live.stopped ? "STOPPED" : "ERROR" });
+      emit({ kind: "finished", ok: false, error: timedOut ? "TIMEOUT" : live.stopped ? "STOPPED" : providerFailure });
     }
     finally { clearTimeout(timer); unsubscribe(); live.session.dispose(); this.sessions.delete(live.session.sessionId); }
   }
@@ -127,13 +187,13 @@ export class PiRuntimeAdapter implements AgentRuntimeAdapter {
 
 /** Binds one adapter to one scheduler execution; caller-supplied identities cannot replace it. */
 export function piRuntimeForExecution(input: {
-  context: { runId: string; task: { id: string; agentId: string; title: string }; executionId: string; traceId: string; inputVersionIds: string[]; inputs: { content: string | Uint8Array; classification: string }[]; produces: string; capabilities: string[] };
+  context: { runId: string; task: { id: string; agentId: string; title: string }; executionId: string; traceId: string; inputVersionIds: string[]; inputs: { content: string | Uint8Array; classification: string; versionId?: string; name?: string; kind?: "source" | "artifact"; declaredTrust?: "TRUSTED" | "UNTRUSTED"; securityState?: string }[]; produces: string; capabilities: string[] };
   cwd: string; config: PiConfig; tools: GatewayTool[]; gateway: ToolGateway;
 }): PiRuntimeAdapter {
   const { context } = input;
   return new PiRuntimeAdapter({ config: input.config, tools: input.tools, gateway: input.gateway, taskContext: async req => {
     if (req.runId !== context.runId || req.taskId !== context.task.id || req.agentId !== context.task.agentId || JSON.stringify(req.inputArtifactIds) !== JSON.stringify(context.inputVersionIds) || JSON.stringify(req.capabilities) !== JSON.stringify(context.capabilities)) throw new Error("Runtime request does not match scheduled execution");
     return { executionId: context.executionId, traceId: context.traceId, cwd: input.cwd, outputName: context.produces,
-      prompt: JSON.stringify({ task: context.task.title, inputs: context.inputs.map(i => ({ classification: i.classification, content: typeof i.content === "string" ? i.content : new TextDecoder().decode(i.content) })) }) };
+      prompt: JSON.stringify({ task: context.task.title, inputs: context.inputs.map(i => ({ versionId: i.versionId, name: i.name, kind: i.kind, declaredTrust: i.declaredTrust, securityState: i.securityState, classification: i.classification, content: typeof i.content === "string" ? i.content : new TextDecoder().decode(i.content) })) }) };
   } });
 }

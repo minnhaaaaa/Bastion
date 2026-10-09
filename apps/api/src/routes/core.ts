@@ -1,3 +1,6 @@
+import { eq } from "drizzle-orm";
+import { schema } from "@bastion/db";
+import { RepositorySelection, RepositoryAccess } from "../repository-access";
 import { z } from "zod";
 import type { FastifyInstance } from "fastify";
 import {
@@ -42,6 +45,64 @@ export function coreRoutes(
   app.get("/api/projects", async (req) => {
     const actor = await op(req);
     return d.projects.listByOwner(actor.userId);
+  });
+
+  app.get("/api/connection", async req => {
+    await op(req);
+    return { runtime: d.runtimeInfo ?? null, repositoryAvailable: !!d.repositoryConnector };
+  });
+
+  app.get("/api/projects/:id/repository", async req => {
+    const actor = await op(req);
+    const { id } = IdParam.parse(req.params);
+    await x.access.ownProject(actor, id);
+    const [row] = await d.db.select().from(schema.projectConnections).where(eq(schema.projectConnections.projectId, id));
+    return { repository: row?.repository ? RepositoryAccess.parse(row.repository) : null };
+  });
+
+  app.post("/api/projects/:id/repository", async (req, reply) => {
+    const actor = await op(req);
+    const { id } = IdParam.parse(req.params);
+    await x.access.ownProject(actor, id);
+    const cmd = z.object({ commandId: z.string().min(1), selection: RepositorySelection.nullable() }).strict().parse(req.body);
+    return x.idem.run(reply, { commandId: cmd.commandId, actorId: actor.userId, route: `projects.repository:${id}` }, async () => {
+      let repository: RepositoryAccess | null = null;
+      if (cmd.selection) {
+        if (!d.repositoryConnector) throw new HttpError("UNAVAILABLE", "Repository connections are not enabled on the controller");
+        try { repository = await d.repositoryConnector(cmd.selection); }
+        catch { throw new HttpError("VALIDATION", "Repository could not be connected. Select a repository root inside the sandbox with tracked regular files within the configured source budget."); }
+      }
+      await d.db.insert(schema.projectConnections).values({ projectId: id, repository }).onConflictDoUpdate({ target: schema.projectConnections.projectId, set: { repository, updatedAt: new Date().toISOString() } });
+      return { status: 200, body: { repository } };
+    });
+  });
+
+  // Preparation has no tools and persists no workflow. The client submits the validated result
+  // through POST /api/workflows before starting its protected run.
+  app.post("/api/projects/:id/task-plan", async (req, reply) => {
+    const actor = await op(req);
+    const { id } = IdParam.parse(req.params);
+    const cmd = z.object({ commandId: z.string().min(1), instruction: z.string().trim().min(1), baseWorkflowId: z.string().min(1).optional(), baseWorkflowVersion: z.number().int().positive().optional(), contextRunId: z.string().min(1).optional() }).strict().parse(req.body);
+    await x.access.ownProject(actor, id);
+    if (!!cmd.baseWorkflowId !== !!cmd.baseWorkflowVersion) throw new HttpError("VALIDATION", "Select an exact workflow version");
+    let base = cmd.baseWorkflowId ? await x.access.ownWorkflow(actor, cmd.baseWorkflowId, cmd.baseWorkflowVersion) : undefined;
+    if (base && base.projectId !== id) throw new HttpError("FORBIDDEN", "Workflow belongs to another project");
+    let followUp: import("../task-planning").FollowUpContext | undefined;
+    if (cmd.contextRunId) {
+      const previous = await x.access.operatorRun(actor, cmd.contextRunId);
+      if (previous.run.projectId !== id) throw new HttpError("FORBIDDEN", "Run belongs to another project");
+      if (!["COMPLETED", "RECOVERED"].includes(previous.run.status) || !previous.verification?.length || previous.verification.some(check => !check.passed)) throw new HttpError("CONFLICT", "Follow up after this run finishes and passes its configured checks");
+      if (base && (base.id !== previous.run.workflowId || base.version !== previous.run.workflowVersion)) throw new HttpError("CONFLICT", "Follow-ups retain the original run's workflow boundaries");
+      base = await x.access.ownWorkflow(actor, previous.run.workflowId, previous.run.workflowVersion);
+      const artifacts = Object.values(previous.artifacts).filter(artifact => previous.latestExecutionByTask[previous.executions[artifact.producerExecutionId]!.taskId] === artifact.producerExecutionId);
+      if (artifacts.some(artifact => artifact.trustState !== "CLEAR" || previous.executions[artifact.producerExecutionId]?.securityState !== "CLEAR") || Object.values(previous.sources).some(source => source.securityState !== "CLEAR" && artifacts.some(artifact => artifact.sourceIds.includes(source.id)))) throw new HttpError("CONFLICT", "Previous outputs are no longer usable");
+      followUp = { runId: previous.run.id, outputs: artifacts.map(artifact => ({ artifactVersionId: artifact.id, name: artifact.name, preview: artifact.preview })) };
+    }
+    const [connection] = await d.db.select().from(schema.projectConnections).where(eq(schema.projectConnections.projectId, id));
+    const repository = !base && connection?.repository ? RepositoryAccess.parse(connection.repository) : undefined;
+    const planner = d.taskPlanner;
+    if (!planner) throw new HttpError("UNAVAILABLE", "Task planning is not connected on the controller");
+    return x.idem.run(reply, { commandId: cmd.commandId, actorId: actor.userId, route: `projects.task-plan:${id}` }, async () => ({ status: 200, body: { definition: await planner(cmd.instruction, base, repository, followUp) } }));
   });
 
   // ── Workflows (definitions are data) ─────────────────────────────────────

@@ -1,0 +1,27 @@
+import * as React from "react";
+import * as Primitive from "@radix-ui/react-dropdown-menu";
+import { cn } from "@/lib/utils";
+import { Check, ChevronRight, Circle } from "lucide-react";
+export const DropdownMenu = Primitive.Root;
+export const DropdownMenuTrigger = Primitive.Trigger;
+export const DropdownMenuGroup = Primitive.Group;
+export const DropdownMenuPortal = Primitive.Portal;
+export const DropdownMenuSub = Primitive.Sub;
+export const DropdownMenuRadioGroup = Primitive.RadioGroup;
+export const DropdownMenuSubTrigger = React.forwardRef<React.ElementRef<typeof Primitive.SubTrigger>, React.ComponentPropsWithoutRef<typeof Primitive.SubTrigger>>(({ className, children, ...props }, ref) => <Primitive.SubTrigger ref={ref} className={cn("relative flex min-h-11 items-center gap-2 rounded-sm py-2 pl-8 pr-3 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:opacity-50", className)} {...props}>{children}<ChevronRight className="ml-auto size-4" /></Primitive.SubTrigger>);
+DropdownMenuSubTrigger.displayName = "DropdownMenuSubTrigger";
+export const DropdownMenuSubContent = React.forwardRef<React.ElementRef<typeof Primitive.SubContent>, React.ComponentPropsWithoutRef<typeof Primitive.SubContent>>(({ className, children, ...props }, ref) => <Primitive.SubContent ref={ref} className={cn("control-popover z-50 min-w-32 rounded-md border border-input bg-popover p-2 text-popover-foreground outline-none", className)} {...props}>{children}</Primitive.SubContent>);
+DropdownMenuSubContent.displayName = "DropdownMenuSubContent";
+export const DropdownMenuContent = React.forwardRef<React.ElementRef<typeof Primitive.Content>, React.ComponentPropsWithoutRef<typeof Primitive.Content>>(({ className, children, ...props }, ref) => <Primitive.Portal><Primitive.Content ref={ref} className={cn("control-popover z-50 min-w-32 rounded-md border border-input bg-popover p-2 text-popover-foreground outline-none", className)} {...props}>{children}</Primitive.Content></Primitive.Portal>);
+DropdownMenuContent.displayName = "DropdownMenuContent";
+export const DropdownMenuItem = React.forwardRef<React.ElementRef<typeof Primitive.Item>, React.ComponentPropsWithoutRef<typeof Primitive.Item>>(({ className, children, ...props }, ref) => <Primitive.Item ref={ref} className={cn("relative flex min-h-11 items-center gap-2 rounded-sm py-2 pl-8 pr-3 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:opacity-50", className)} {...props}>{children}</Primitive.Item>);
+DropdownMenuItem.displayName = "DropdownMenuItem";
+export const DropdownMenuCheckboxItem = React.forwardRef<React.ElementRef<typeof Primitive.CheckboxItem>, React.ComponentPropsWithoutRef<typeof Primitive.CheckboxItem>>(({ className, children, ...props }, ref) => <Primitive.CheckboxItem ref={ref} className={cn("relative flex min-h-11 items-center gap-2 rounded-sm py-2 pl-8 pr-3 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:opacity-50", className)} {...props}><span className="absolute left-2"><Primitive.ItemIndicator><Check className="size-4" /></Primitive.ItemIndicator></span>{children}</Primitive.CheckboxItem>);
+DropdownMenuCheckboxItem.displayName = "DropdownMenuCheckboxItem";
+export const DropdownMenuRadioItem = React.forwardRef<React.ElementRef<typeof Primitive.RadioItem>, React.ComponentPropsWithoutRef<typeof Primitive.RadioItem>>(({ className, children, ...props }, ref) => <Primitive.RadioItem ref={ref} className={cn("relative flex min-h-11 items-center gap-2 rounded-sm py-2 pl-8 pr-3 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:opacity-50", className)} {...props}><span className="absolute left-2"><Primitive.ItemIndicator><Circle className="size-4" /></Primitive.ItemIndicator></span>{children}</Primitive.RadioItem>);
+DropdownMenuRadioItem.displayName = "DropdownMenuRadioItem";
+export const DropdownMenuLabel = React.forwardRef<React.ElementRef<typeof Primitive.Label>, React.ComponentPropsWithoutRef<typeof Primitive.Label>>(({ className, children, ...props }, ref) => <Primitive.Label ref={ref} className={cn("text-sm font-medium", className)} {...props}>{children}</Primitive.Label>);
+DropdownMenuLabel.displayName = "DropdownMenuLabel";
+export const DropdownMenuSeparator = React.forwardRef<React.ElementRef<typeof Primitive.Separator>, React.ComponentPropsWithoutRef<typeof Primitive.Separator>>(({ className, children, ...props }, ref) => <Primitive.Separator ref={ref} className={cn("bg-border my-1 h-px", className)} {...props}>{children}</Primitive.Separator>);
+DropdownMenuSeparator.displayName = "DropdownMenuSeparator";
+export function DropdownMenuShortcut({ className, ...props }: React.ComponentProps<"span">) { return <span className={cn("ml-auto text-xs opacity-60", className)} {...props} />; }

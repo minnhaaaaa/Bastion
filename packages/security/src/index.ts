@@ -73,7 +73,9 @@ export class PolicyToolGateway implements ToolGateway {
     let attempted = false;
     const envelope = { runId: call.runId, taskId: call.taskId, agentId: call.agentId, traceId: call.traceId };
     const deny = async (ruleId: string, reason: string): Promise<ToolCallResult> => {
-      if (requested) {
+      // Once execution was attempted, preserve its original decision and ERROR outcome.
+      // A later DENY event would incorrectly reduce the call to NOT_EXECUTED.
+      if (requested && !attempted) {
         await this.options.journal.append(call.runId, [
           { ...envelope, type: "tool.decided", payload: { toolRequestId, decision: "DENY", ruleId, reason } },
           ...(!attempted ? [{ ...envelope, type: "tool.executed" as const, payload: { toolRequestId, outcome: "NOT_EXECUTED" as const } }] : []),

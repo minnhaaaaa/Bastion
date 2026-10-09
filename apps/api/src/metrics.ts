@@ -40,6 +40,14 @@ export async function computeMetrics(s: RunSnapshot, events: RunEvent[], audit?:
     .filter((p): p is readonly [string, string] => Boolean(p[0] && p[1]))
     .map(([a, b]) => ms(a, b));
 
+  let unsafeActionsExecuted: number | null = null;
+  if (audit) {
+    try {
+      const count = await audit.unsafeAccessCount(s.run.id);
+      if (Number.isSafeInteger(count) && count >= 0) unsafeActionsExecuted = count;
+    } catch { /* The contract uses null for unmeasurable outcomes, never a synthetic zero. */ }
+  }
+
   return {
     runId: s.run.id,
     mode: s.run.mode,
@@ -54,7 +62,7 @@ export async function computeMetrics(s: RunSnapshot, events: RunEvent[], audit?:
       executed: tools.filter((t) => t.executionOutcome === "SUCCESS").length,
       errored: tools.filter((t) => t.executionOutcome === "ERROR").length,
     },
-    unsafeActionsExecuted: audit ? await audit.unsafeAccessCount(s.run.id) : null,
+    unsafeActionsExecuted,
     legitimateCompletion: taskIds.length > 0 && latest.every((ex) => ex?.state === "SUCCEEDED" && ex.securityState === "CLEAR"),
     tasks: {
       total: taskIds.length,

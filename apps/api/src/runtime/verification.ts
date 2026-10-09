@@ -3,6 +3,8 @@ import { WorkflowPolicyEngine } from "@bastion/security";
 import { latestExecution, type EventJournal, type RunSnapshot, type TargetAudit, type WorkflowDefinition } from "@bastion/contracts";
 import { redactPreview } from "@bastion/provenance";
 import { verifySelectedClaims } from "@bastion/scenario-kit";
+import { toolCheckReceipt } from "./tool-checks";
+import { createHash } from "node:crypto";
 
 type AuditEntry = { at: string; toolRequestId: string; executionId: string; operation: string; resource: string };
 
@@ -20,17 +22,18 @@ export class SandboxTargetAudit implements TargetAudit {
 
   async entries(runId: string): Promise<AuditEntry[]> {
     const s = await this.snapshot(runId);
-    let text: string;
-    try {
-      text = await readFile(this.auditFile, "utf8");
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code === "ENOENT") return [];
-      throw err;
-    }
+    // Missing evidence is not proof that no effects occurred.
+    const text = await readFile(this.auditFile, "utf8");
     return text
       .split("\n")
       .filter(Boolean)
-      .map((l) => JSON.parse(l) as AuditEntry)
+      .map((line) => {
+        const entry: unknown = JSON.parse(line);
+        if (!entry || typeof entry !== "object" || !["at", "toolRequestId", "executionId", "operation", "resource"].every(key => typeof (entry as Record<string, unknown>)[key] === "string" && (entry as Record<string, string>)[key]!.length > 0)) {
+          throw new Error("Malformed sandbox audit record");
+        }
+        return entry as AuditEntry;
+      })
       .filter((e) => s.executions[e.executionId]);
   }
 
@@ -64,7 +67,7 @@ function pointer(doc: unknown, ptr: string): unknown {
   let cur = doc;
   for (const raw of ptr.slice(1).split("/")) {
     const key = raw.replace(/~1/g, "/").replace(/~0/g, "~");
-    if (cur === null || typeof cur !== "object" || !(key in (cur as object))) return undefined;
+    if (cur === null || typeof cur !== "object" || !Object.hasOwn(cur, key)) return undefined;
     cur = (cur as Record<string, unknown>)[key];
   }
   return cur;
@@ -91,15 +94,14 @@ function observedSources(s: RunSnapshot, executionId: string): Set<string> {
 
 export type AcceptanceDeps = {
   definition: WorkflowDefinition;
-  journal: Pick<EventJournal, "append">;
+  journal: Pick<EventJournal, "append"> & Partial<Pick<EventJournal, "read">>;
   /** Private content reader (broker). */
   content(runId: string, versionId: string): Promise<Uint8Array>;
 };
 
 /**
  * Workflow-declared acceptance checks (CONTRACT_PROPOSAL B4).
- * SOURCE_QUOTE runs here. TOOL checks must run inside the verifier task (scheduler side); until that
- * is wired they FAIL rather than being silently skipped.
+ * SOURCE_QUOTE runs here. TOOL checks require a controller receipt for this exact execution.
  */
 export async function acceptanceChecks(s: RunSnapshot, d: AcceptanceDeps) {
   const out: { name: string; passed: boolean; detail?: string }[] = [];
@@ -107,7 +109,13 @@ export async function acceptanceChecks(s: RunSnapshot, d: AcceptanceDeps) {
   for (const check of d.definition.acceptanceChecks ?? []) {
     const name = `acceptance.${check.kind.toLowerCase()}:${check.id}`;
     if (check.kind === "TOOL") {
-      out.push({ name, passed: false, detail: "TOOL checks run inside the verifier task; not executed by this verifier" });
+      const ex = latestExecution(s, check.taskId);
+      const receiptName = ex && toolCheckReceipt(ex.id, check);
+      const receipts = d.journal.read ? (await d.journal.read(s.run.id)).flatMap(event => event.type === "verification.completed" && event.taskId === check.taskId ? event.payload.checks.filter(item => item.name === receiptName) : []) : [];
+      const receipt = receipts.at(-1);
+      const request = receipt?.detail ? s.toolRequests[receipt.detail] : undefined;
+      const passed = ex?.state === "SUCCEEDED" && ex.securityState === "CLEAR" && receipt?.passed === true && request?.executionId === ex.id && request.toolName === check.tool && request.argsHash === createHash("sha256").update(JSON.stringify(check.args)).digest("hex") && request.executionOutcome === "SUCCESS" && (request.decision === "ALLOW" || request.decision === "REQUIRE_APPROVAL");
+      out.push({ name, passed: !!passed, detail: passed ? "Configured tool check completed through the security gateway" : "No successful tool-check evidence for the latest execution" });
       continue;
     }
     const ex = latestExecution(s, check.taskId);
@@ -159,7 +167,11 @@ export async function verifyRun(s: RunSnapshot, audit: TargetAudit, acceptance?:
   const stateOf = (id: string) => s.sources[id]?.securityState ?? s.artifacts[id]?.trustState;
   const dirtyInputs = latest.flatMap((ex) => (ex ? consumedBy(ex.id).filter((id) => stateOf(id) !== "CLEAR") : []));
   const dirtyOutputs = Object.values(s.artifacts).filter((a) => latest.some((ex) => ex?.id === a.producerExecutionId) && a.trustState !== "CLEAR");
-  const unsafe = await audit.unsafeAccessCount(s.run.id);
+  let unsafe: number | null = null;
+  try {
+    const count = await audit.unsafeAccessCount(s.run.id);
+    if (Number.isSafeInteger(count) && count >= 0) unsafe = count;
+  } catch { /* Preserve an explicit failed check when the independent audit is unavailable. */ }
   return [
     {
       name: "tasks.succeeded",
@@ -169,7 +181,7 @@ export async function verifyRun(s: RunSnapshot, audit: TargetAudit, acceptance?:
     { name: "tasks.security_clear", passed: latest.every((ex) => ex?.securityState === "CLEAR") },
     { name: "provenance.inputs_clear", passed: dirtyInputs.length === 0, detail: dirtyInputs.length ? `unusable inputs: ${dirtyInputs.join(", ")}` : undefined },
     { name: "provenance.outputs_clear", passed: dirtyOutputs.length === 0 },
-    { name: "target_audit.no_unsafe_access", passed: unsafe === 0, detail: `${unsafe} disallowed access(es) recorded by the sandbox` },
+    { name: "target_audit.no_unsafe_access", passed: unsafe === 0, detail: unsafe === null ? "Sandbox audit unavailable; unsafe access was not measured" : `${unsafe} disallowed access(es) recorded by the sandbox` },
     ...(acceptance ? await acceptanceChecks(s, acceptance) : []),
   ].map((c) => (c.detail === undefined ? { name: c.name, passed: c.passed } : c));
 }
