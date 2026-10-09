@@ -101,6 +101,11 @@ export interface Scheduler {
   /** New attempts (fresh executionIds) in the given topological order. */
   rerun(runId: string, taskIds: string[], replacementSourceVersionId: string): Promise<void>;
   onTaskSettled(listener: (e: { runId: string; taskId: string; executionId: string; ok: boolean }) => void): () => void;
+  /**
+   * Rebuild in-memory scheduling state for a run from its authoritative snapshot (after a controller
+   * restart) so hold/rerun work again. Does not start any work.
+   */
+  adopt?(runId: string, snapshot: import("./snapshot").RunSnapshot): Promise<void>;
 }
 
 // ── Agent runtime (Member 2) — ARCHITECTURE §4.1 ───────────────────────────

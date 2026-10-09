@@ -14,7 +14,7 @@ An agent workspace with security built in. A security-native multi-agent orchest
 
 ## Quickstart
 
-Requires Node 22+, pnpm 10+, Docker.
+Requires Node 22+, pnpm 10+, Docker. On macOS without Docker Desktop: `brew install colima docker docker-compose && colima start` (add `/opt/homebrew/lib/docker/cli-plugins` to `cliPluginsExtraDirs` in `~/.docker/config.json`).
 
 ```bash
 pnpm install

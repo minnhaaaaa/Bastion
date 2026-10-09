@@ -134,5 +134,5 @@ export function buildAgentRuntime(input: {
 
   const verifier: RecoveryVerifier = { verify: async (runId) => verifyRun(await snapshot(runId), audit) };
 
-  return { launcher, scheduler, verifier, audit, fence };
+  return { launcher, scheduler, verifier, audit, fence, gateway, info: { provider: pi.provider, model: pi.model, timeoutMs: pi.timeoutMs } };
 }

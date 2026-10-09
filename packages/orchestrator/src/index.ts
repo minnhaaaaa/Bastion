@@ -4,7 +4,7 @@
  * See TEAM_PLAN.md and packages/contracts/src/ports.ts.
  */
 import { TaskSpec, WorkflowDefinition, newId } from "@bastion/contracts";
-import type { AgentRuntimeAdapter, ArtifactBroker, Classification, EventJournal, RuntimeEvent, Scheduler, TaskState } from "@bastion/contracts";
+import type { AgentRuntimeAdapter, ArtifactBroker, Classification, EventJournal, RunSnapshot, RuntimeEvent, Scheduler, TaskState } from "@bastion/contracts";
 
 export function schedulerParallelismFromEnv(env: NodeJS.ProcessEnv = process.env): number {
   const value = Number(env.SCHEDULER_PARALLELISM);
@@ -13,7 +13,7 @@ export function schedulerParallelismFromEnv(env: NodeJS.ProcessEnv = process.env
 }
 
 export type ExecutionContext = { runId: string; task: TaskSpec; executionId: string; traceId: string; inputVersionIds: string[]; inputs: { content: string | Uint8Array; classification: Classification }[]; produces: string; capabilities: string[] };
-type Attempt = { task: TaskSpec; executionId: string; attempt: number; state: TaskState; held: boolean; outputId?: string; sessionId?: string; runtime?: AgentRuntimeAdapter; done?: Promise<void> };
+type Attempt = { task: TaskSpec; executionId: string; attempt: number; state: TaskState; held: boolean; outputId?: string; sessionId?: string; runtime?: AgentRuntimeAdapter; done?: Promise<void>; /** executed before a controller restart */ executed?: boolean };
 type RunWork = { definition: WorkflowDefinition; attempts: Map<string, Attempt>; driving?: Promise<void> };
 export class WorkflowScheduler implements Scheduler {
   private readonly runs = new Map<string, RunWork>();
@@ -54,6 +54,20 @@ export class WorkflowScheduler implements Scheduler {
     await this.options.journal.append(runId, [{ runId, traceId: newId("trace"), type: "run.planned", payload: { tasks: tasks.map(t => ({ taskId: t.id, agentId: t.agentId, role: t.role, title: t.title, declaredDeps: t.declaredDeps, sourceIds: t.sourceIds, retryPolicy: t.retryPolicy })) } }]);
     await this.drive(runId, work);
   }
+  async adopt(runId: string, snapshot: RunSnapshot): Promise<void> {
+    if (this.runs.has(runId)) return;
+    const definition = WorkflowDefinition.parse(await this.options.workflowForRun(runId));
+    const attempts = new Map<string, Attempt>();
+    for (const task of Object.values(snapshot.tasks)) {
+      const exId = snapshot.latestExecutionByTask[task.id];
+      const ex = exId ? snapshot.executions[exId] : undefined;
+      if (!ex) { attempts.set(task.id, { task: structuredClone(task), executionId: newId("exec"), attempt: 1, state: "PENDING", held: true }); continue; }
+      const output = Object.values(snapshot.artifacts).filter(a => a.producerExecutionId === ex.id).sort((a, b) => b.version - a.version)[0];
+      attempts.set(task.id, { task: structuredClone(task), executionId: ex.id, attempt: ex.attempt, state: ex.state, held: ex.state !== "SUCCEEDED" && ex.state !== "FAILED",
+        executed: ex.sessionId !== null || ex.state === "SUCCEEDED" || ex.state === "FAILED", ...(output ? { outputId: output.id } : {}) });
+    }
+    this.runs.set(runId, { definition, attempts });
+  }
   onTaskSettled(listener: (e: { runId: string; taskId: string; executionId: string; ok: boolean }) => void): () => void { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; }
   async hold(runId: string, taskIds: string[], reason: string): Promise<{ heldExecutionIds: string[] }> {
     const work = this.get(runId);
@@ -85,7 +99,7 @@ export class WorkflowScheduler implements Scheduler {
     const selected = taskIds.map(id => this.attempt(work, id));
     const order = new Map(taskIds.map((id, i) => [id, i]));
     // An attempt that never executed (held before it started) is resumed, not retried.
-    const neverRan = (a: Attempt) => !a.done && !a.sessionId;
+    const neverRan = (a: Attempt) => !a.done && !a.sessionId && !a.executed;
     for (const a of selected) {
       if (a.task.declaredDeps.some(dep => order.has(dep) && order.get(dep)! >= order.get(a.task.id)!)) throw new Error("Rerun order is not topological");
       if (!neverRan(a) && (a.attempt >= a.task.retryPolicy.maxAttempts || !a.task.retryPolicy.idempotent)) throw new Error("Retry policy forbids rerun");

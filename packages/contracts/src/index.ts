@@ -8,4 +8,5 @@ export * from "./snapshot";
 export * from "./socket";
 export * from "./reduce";
 export * from "./workflow";
+export * from "./metrics";
 export type * from "./ports";

@@ -47,6 +47,9 @@ export const ArenaPhaseUpdate = z.object({
   phaseStartedAt: z.string().datetime(),
   phaseEndsAt: z.string().datetime().nullable(),
   serverNow: z.string().datetime(),
+  /** Host pause: clock frozen, player actions rejected. */
+  paused: z.boolean().optional(),
+  round: z.number().int().min(1).optional(),
 });
 export type ArenaPhaseUpdate = z.infer<typeof ArenaPhaseUpdate>;
 

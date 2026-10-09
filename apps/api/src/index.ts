@@ -4,6 +4,7 @@ import { RecoveryManager } from "@bastion/recovery";
 import { Neo4jProjector, loadSchemaStatements } from "@bastion/knowledge-graph";
 import { loadEnv } from "./env";
 import { buildAgentRuntime } from "./runtime";
+import { reconcileOnBoot } from "./reconcile";
 import { buildServer } from "./server";
 
 const env = loadEnv();
@@ -50,6 +51,7 @@ const { app } = await buildServer(
     runs,
     commands: new CommandStore(pg.db),
     launcher: runtime?.launcher,
+    runtimeInfo: runtime?.info,
     audit: runtime?.audit,
     graph,
     operators: env.OPERATOR_TOKENS,
@@ -57,10 +59,18 @@ const { app } = await buildServer(
       roomTtlMs: env.ROOM_TTL_SECONDS * 1000,
       briefingMs: env.ARENA_BRIEFING_SECONDS * 1000,
       attackWindowMs: env.ARENA_ATTACK_WINDOW_SECONDS * 1000,
+      reconnectGraceMs: env.ARENA_RECONNECT_GRACE_SECONDS * 1000,
+      sweepIntervalMs: env.ARENA_SWEEP_SECONDS * 1000,
+      joinRatePerMinute: env.ARENA_JOIN_RATE_PER_MINUTE,
+      actionRatePerMinute: env.ARENA_ACTION_RATE_PER_MINUTE,
     },
   },
   { webOrigin: env.WEB_ORIGIN, logLevel: env.LOG_LEVEL },
 );
+
+// Close out work that was in flight before this process started (listeners are attached now).
+const reconciled = await reconcileOnBoot({ db: pg.db, journal, scheduler: runtime?.scheduler });
+if (reconciled.failedRuns.length || reconciled.adopted.length) console.warn("boot reconciliation", reconciled);
 
 const shutdown = async () => {
   await app.close();

@@ -10,7 +10,9 @@ import { RecoveryManager } from "@bastion/recovery";
 import { newSecret } from "./auth";
 import { buildServer } from "./server";
 
-export async function createTestApp(opts: { launcher?: RunLauncher; audit?: TargetAudit; briefingMs?: number; attackWindowMs?: number } = {}) {
+export async function createTestApp(
+  opts: { launcher?: RunLauncher; audit?: TargetAudit; briefingMs?: number; attackWindowMs?: number; reconnectGraceMs?: number; roomTtlMs?: number; joinRatePerMinute?: number } = {},
+) {
   const { db, close } = await createTestDb();
   const dir = await mkdtemp(join(tmpdir(), "bastion-api-"));
   const journal = new PgEventJournal(db);
@@ -23,7 +25,7 @@ export async function createTestApp(opts: { launcher?: RunLauncher; audit?: Targ
   const tokenB = newSecret();
   const userA = newId("user");
   const userB = newId("user");
-  const { app, io } = await buildServer(
+  const { app, io, arena } = await buildServer(
     {
       db,
       journal,
@@ -39,13 +41,22 @@ export async function createTestApp(opts: { launcher?: RunLauncher; audit?: Targ
         [tokenA, userA],
         [tokenB, userB],
       ]),
-      config: { roomTtlMs: 600_000, briefingMs: opts.briefingMs ?? 60_000, attackWindowMs: opts.attackWindowMs ?? 60_000 },
+      config: {
+        roomTtlMs: opts.roomTtlMs ?? 600_000,
+        briefingMs: opts.briefingMs ?? 60_000,
+        attackWindowMs: opts.attackWindowMs ?? 60_000,
+        reconnectGraceMs: opts.reconnectGraceMs ?? 60_000,
+        sweepIntervalMs: 3_600_000,
+        joinRatePerMinute: opts.joinRatePerMinute ?? 1000,
+        actionRatePerMinute: 1000,
+      },
     },
     { webOrigin: "http://test.invalid", logLevel: "silent" },
   );
   return {
     app,
     io,
+    arena,
     db,
     journal,
     broker,

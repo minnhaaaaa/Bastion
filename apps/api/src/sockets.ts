@@ -46,6 +46,7 @@ export function attachSockets(io: IO, d: AppDeps, x: { auth: Authenticator; acce
 
   io.on("connection", (socket: Sock) => {
     const mine = new Map<string, Sub>();
+    const playerRooms = new Set<string>();
 
     socket.on("run.subscribe", async (raw, ack) => {
       const req = RunSubscribe.safeParse(raw);
@@ -92,7 +93,10 @@ export function attachSockets(io: IO, d: AppDeps, x: { auth: Authenticator; acce
         await socket.join(`room:${roomId}`);
         if (isPlayer) {
           await socket.join(`player:${actor.playerId}`);
-          await x.arena.setConnected(actor.playerId, true);
+          if (!playerRooms.has(actor.playerId)) {
+            playerRooms.add(actor.playerId);
+            await x.arena.playerConnected(actor.playerId);
+          }
           socket.emit("player.private_state", await x.arena.privateState(actor.playerId));
         }
         socket.emit("arena.phase", x.arena.phaseUpdate(room));
@@ -105,8 +109,7 @@ export function attachSockets(io: IO, d: AppDeps, x: { auth: Authenticator; acce
 
     socket.on("disconnect", () => {
       for (const [runId, sub] of mine) runSubs.get(runId)?.delete(sub);
-      const a = socket.data.actor;
-      if (a?.kind === "player") void x.arena.setConnected(a.playerId, false).catch(() => undefined);
+      for (const playerId of playerRooms) void x.arena.playerDisconnected(playerId).catch(() => undefined);
     });
   });
 
@@ -116,6 +119,7 @@ export function attachSockets(io: IO, d: AppDeps, x: { auth: Authenticator; acce
     privateState: (playerId, s) => io.to(`player:${playerId}`).emit("player.private_state", s),
     actionResult: (playerId, r) => io.to(`player:${playerId}`).emit("action.result", r),
     reveal: (roomId, r) => io.to(`room:${roomId}`).emit("arena.reveal", r),
+    closeRoom: (roomId) => io.in(`room:${roomId}`).disconnectSockets(true),
   };
   x.arena.attach(emitter);
 }

@@ -25,6 +25,9 @@ type Player = typeof schema.arenaPlayers.$inferSelect;
 export const MIN_PLAYERS = 2;
 export const MAX_PLAYERS = 6;
 const ATTACK_CARDS = new Set(["POISON_DOCUMENT", "REDIRECT_TOOL", "LEAK_SECRET"]);
+/** Controller cards that must stay with a connected defender. */
+const CONTROL_CARDS = ["QUARANTINE", "APPROVE_RECOVERY"] as const;
+const ENDED: ArenaPhase[] = ["LOBBY", "REVEAL", "COMPLETE"];
 const ORDER: ArenaPhase[] = ["LOBBY", "BRIEFING", "ATTACK_WINDOW", "AGENT_EXECUTION", "INVESTIGATION", "CONTAINMENT", "RECOVERY", "REVEAL", "COMPLETE"];
 const atOrAfter = (p: ArenaPhase, q: ArenaPhase) => ORDER.indexOf(p) >= ORDER.indexOf(q);
 
@@ -35,6 +38,8 @@ export interface ArenaEmitter {
   privateState(playerId: string, s: PlayerPrivateState): void;
   actionResult(playerId: string, r: ActionResult): void;
   reveal(roomId: string, r: ArenaReveal): void;
+  /** Disconnect every socket of an expired room. */
+  closeRoom(roomId: string): void;
 }
 
 const JOIN_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -55,6 +60,8 @@ function shuffle<T>(xs: T[]): T[] {
  */
 export class ArenaService {
   private readonly timers = new Map<string, NodeJS.Timeout>();
+  private readonly graceTimers = new Map<string, NodeJS.Timeout>();
+  private readonly connections = new Map<string, number>();
   private emitter: ArenaEmitter | null = null;
   private readonly now: () => Date;
 
@@ -70,8 +77,9 @@ export class ArenaService {
   }
 
   stop() {
-    for (const t of this.timers.values()) clearTimeout(t);
+    for (const t of [...this.timers.values(), ...this.graceTimers.values()]) clearTimeout(t);
     this.timers.clear();
+    this.graceTimers.clear();
   }
 
   // ── Queries ──────────────────────────────────────────────────────────────
@@ -110,6 +118,8 @@ export class ArenaService {
       phaseStartedAt: new Date(room.phaseStartedAt).toISOString(),
       phaseEndsAt: room.phaseEndsAt ? new Date(room.phaseEndsAt).toISOString() : null,
       serverNow: this.now().toISOString(),
+      paused: room.paused,
+      round: room.round,
     };
   }
 
@@ -177,10 +187,117 @@ export class ArenaService {
     return { playerId, playerToken: token };
   }
 
-  async setConnected(playerId: string, connected: boolean) {
+  private async setConnected(playerId: string, connected: boolean) {
     const p = await this.player(playerId);
     await this.d.db.update(schema.arenaPlayers).set({ connected }).where(eq(schema.arenaPlayers.id, playerId));
     this.emitter?.presence(p.roomId, await this.presence(p.roomId));
+  }
+
+  /** A socket for this player subscribed. Multiple tabs/devices are counted. */
+  async playerConnected(playerId: string) {
+    this.connections.set(playerId, (this.connections.get(playerId) ?? 0) + 1);
+    clearTimeout(this.graceTimers.get(playerId));
+    this.graceTimers.delete(playerId);
+    await this.setConnected(playerId, true);
+  }
+
+  /** Last socket gone → offline; after the grace period, hand control cards to a connected defender. */
+  async playerDisconnected(playerId: string) {
+    const n = (this.connections.get(playerId) ?? 1) - 1;
+    if (n > 0) return void this.connections.set(playerId, n);
+    this.connections.delete(playerId);
+    await this.setConnected(playerId, false);
+    clearTimeout(this.graceTimers.get(playerId));
+    this.graceTimers.set(
+      playerId,
+      setTimeout(() => {
+        this.graceTimers.delete(playerId);
+        void this.reassignControlCards(playerId).catch(() => undefined);
+      }, this.d.config.reconnectGraceMs),
+    );
+  }
+
+  /** Move QUARANTINE / APPROVE_RECOVERY from an offline defender to the connected defender holding fewest cards. */
+  async reassignControlCards(playerId: string): Promise<{ card: string; to: string }[]> {
+    const p = await this.player(playerId);
+    const room = await this.room(p.roomId);
+    if (p.connected || p.role !== "DEFENDER" || ENDED.includes(room.phase)) return [];
+    const moved: { card: string; to: string }[] = [];
+    for (const card of CONTROL_CARDS) {
+      if (!p.cards.includes(card)) continue;
+      const candidates = (await this.players(room.id))
+        .filter((x) => x.id !== p.id && x.role === "DEFENDER" && x.connected && !x.cards.includes(card))
+        .sort((a, b) => a.cards.length - b.cards.length);
+      const to = candidates[0];
+      if (!to) continue; // nobody online: the host/operator console can still act
+      const fresh = await this.player(p.id);
+      await this.d.db.transaction(async (tx) => {
+        await tx.update(schema.arenaPlayers).set({ cards: fresh.cards.filter((c) => c !== card) }).where(eq(schema.arenaPlayers.id, p.id));
+        await tx.update(schema.arenaPlayers).set({ cards: [...to.cards, card] }).where(eq(schema.arenaPlayers.id, to.id));
+      });
+      moved.push({ card, to: to.id });
+      this.emitter?.privateState(to.id, await this.privateState(to.id));
+    }
+    if (moved.length) this.emitter?.privateState(p.id, await this.privateState(p.id));
+    return moved;
+  }
+
+  // ── Host controls ────────────────────────────────────────────────────────
+  async pause(roomId: string) {
+    const room = await this.room(roomId);
+    if (ENDED.includes(room.phase)) throw new HttpError("WRONG_PHASE", `cannot pause in ${room.phase}`);
+    if (room.paused) throw new HttpError("CONFLICT", "already paused");
+    clearTimeout(this.timers.get(roomId));
+    this.timers.delete(roomId);
+    const remaining = room.phaseEndsAt ? Math.max(0, Date.parse(room.phaseEndsAt) - this.now().getTime()) : null;
+    await this.d.db.update(schema.arenaRooms).set({ paused: true, pausedRemainingMs: remaining, phaseEndsAt: null }).where(eq(schema.arenaRooms.id, roomId));
+    const updated = await this.room(roomId);
+    this.emitter?.phase(roomId, this.phaseUpdate(updated));
+    return updated;
+  }
+
+  async resume(roomId: string) {
+    const room = await this.room(roomId);
+    if (!room.paused) throw new HttpError("CONFLICT", "not paused");
+    const endsAt = room.pausedRemainingMs === null ? null : new Date(this.now().getTime() + room.pausedRemainingMs).toISOString();
+    await this.d.db.update(schema.arenaRooms).set({ paused: false, pausedRemainingMs: null, phaseEndsAt: endsAt }).where(eq(schema.arenaRooms.id, roomId));
+    const updated = await this.room(roomId);
+    this.schedule(updated);
+    this.emitter?.phase(roomId, this.phaseUpdate(updated));
+    return updated;
+  }
+
+  /** Back to LOBBY with the same players and a new round number. Past runs remain in history. */
+  async reset(roomId: string) {
+    const room = await this.room(roomId);
+    if (room.status === "EXPIRED") throw new HttpError("EXPIRED", "room expired");
+    clearTimeout(this.timers.get(roomId));
+    this.timers.delete(roomId);
+    await this.d.db.transaction(async (tx) => {
+      await tx
+        .update(schema.arenaRooms)
+        .set({ phase: "LOBBY", status: "OPEN", runId: null, pendingAttackPayloadIds: [], paused: false, pausedRemainingMs: null, phaseEndsAt: null, phaseStartedAt: this.now().toISOString(), round: room.round + 1 })
+        .where(eq(schema.arenaRooms.id, roomId));
+      await tx.update(schema.arenaPlayers).set({ role: "DEFENDER", cards: [], usedCards: [], evidence: [] }).where(eq(schema.arenaPlayers.roomId, roomId));
+    });
+    const updated = await this.room(roomId);
+    this.emitter?.phase(roomId, this.phaseUpdate(updated));
+    for (const p of await this.players(roomId)) this.emitter?.privateState(p.id, await this.privateState(p.id));
+    return updated;
+  }
+
+  /** Expire rooms past their TTL: revoke tokens (status EXPIRED), stop timers, close sockets. */
+  async sweepExpired(): Promise<string[]> {
+    const now = this.now().getTime();
+    const rooms = await this.d.db.select().from(schema.arenaRooms);
+    const expired = rooms.filter((r) => r.status !== "EXPIRED" && Date.parse(r.expiresAt) <= now);
+    for (const r of expired) {
+      clearTimeout(this.timers.get(r.id));
+      this.timers.delete(r.id);
+      await this.d.db.update(schema.arenaRooms).set({ status: "EXPIRED", phaseEndsAt: null }).where(eq(schema.arenaRooms.id, r.id));
+      this.emitter?.closeRoom(r.id);
+    }
+    return expired.map((r) => r.id);
   }
 
   async start(roomId: string) {
@@ -219,7 +336,7 @@ export class ArenaService {
       .update(schema.arenaRooms)
       .set({
         phase,
-        status: phase === "LOBBY" ? "OPEN" : phase === "REVEAL" || phase === "COMPLETE" ? "FINISHED" : "IN_PROGRESS",
+        status: room.status === "EXPIRED" ? "EXPIRED" : phase === "LOBBY" ? "OPEN" : phase === "REVEAL" || phase === "COMPLETE" ? "FINISHED" : "IN_PROGRESS",
         phaseStartedAt: now.toISOString(),
         phaseEndsAt: durationMs ? new Date(now.getTime() + durationMs).toISOString() : null,
       })
@@ -234,7 +351,7 @@ export class ArenaService {
   schedule(room: Room) {
     clearTimeout(this.timers.get(room.id));
     this.timers.delete(room.id);
-    if (!room.phaseEndsAt) return;
+    if (!room.phaseEndsAt || room.paused || room.status === "EXPIRED") return;
     const delay = Math.max(0, Date.parse(room.phaseEndsAt) - this.now().getTime());
     this.timers.set(
       room.id,
@@ -249,7 +366,7 @@ export class ArenaService {
 
   private async onTimer(roomId: string, expected: ArenaPhase) {
     const room = await this.room(roomId);
-    if (room.phase !== expected) return;
+    if (room.phase !== expected || room.paused || room.status === "EXPIRED") return;
     if (expected === "BRIEFING") await this.enterPhase(roomId, "ATTACK_WINDOW", this.d.config.attackWindowMs);
     else if (expected === "ATTACK_WINDOW") await this.beginExecution(roomId);
   }
@@ -286,7 +403,7 @@ export class ArenaService {
     const actions = await this.d.db
       .select()
       .from(schema.arenaActions)
-      .where(and(eq(schema.arenaActions.roomId, roomId), eq(schema.arenaActions.outcome, "ACCEPTED")))
+      .where(and(eq(schema.arenaActions.roomId, roomId), eq(schema.arenaActions.round, room.round), eq(schema.arenaActions.outcome, "ACCEPTED")))
       .orderBy(asc(schema.arenaActions.createdAt));
     const unsafe = this.d.audit ? await this.d.audit.unsafeAccessCount(room.runId) : null;
     const tasks = Object.keys(s.tasks);
@@ -324,6 +441,8 @@ export class ArenaService {
     const room = await this.room(p.roomId);
     let result: ActionResult;
     try {
+      if (room.status === "EXPIRED") throw new Error("room expired");
+      if (room.paused) throw new Error("the round is paused");
       const data = await this.perform(p, room, cmd);
       result = { commandId: cmd.commandId, outcome: "ACCEPTED", message: `${cmd.card} accepted`, ...(data === undefined ? {} : { data }) };
     } catch (err) {
@@ -332,7 +451,7 @@ export class ArenaService {
     }
     await this.d.db
       .insert(schema.arenaActions)
-      .values({ id: newId("command"), roomId: room.id, playerId, commandId: cmd.commandId, type: cmd.card, outcome: result.outcome, message: result.message })
+      .values({ id: newId("command"), roomId: room.id, playerId, commandId: cmd.commandId, type: cmd.card, outcome: result.outcome, message: result.message, round: room.round })
       .onConflictDoNothing();
     this.emitter?.actionResult(playerId, result);
     this.emitter?.privateState(playerId, await this.privateState(playerId));

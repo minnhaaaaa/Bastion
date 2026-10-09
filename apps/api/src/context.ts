@@ -37,10 +37,18 @@ export interface AppDeps {
   audit?: TargetAudit;
   graph?: GraphProjector;
   operators: Map<string, string>;
+  /** Model/runtime configuration recorded in exports (never credentials). */
+  runtimeInfo?: { provider: string; model: string; timeoutMs: number };
   config: {
     roomTtlMs: number;
     briefingMs: number;
     attackWindowMs: number;
+    /** Offline time before a defender's control cards move to a connected defender. */
+    reconnectGraceMs: number;
+    /** How often expired rooms are swept. */
+    sweepIntervalMs: number;
+    joinRatePerMinute: number;
+    actionRatePerMinute: number;
   };
   now?: () => Date;
 }

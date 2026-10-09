@@ -1,5 +1,6 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import rateLimit from "@fastify/rate-limit";
 import { Server } from "socket.io";
 import type { ClientToServerEvents, ServerToClientEvents } from "@bastion/contracts";
 import { Authenticator, type Actor } from "./auth";
@@ -18,6 +19,10 @@ export async function buildServer(deps: AppDeps, opts: { webOrigin: string; logL
   const app = Fastify({ logger: { level: opts.logLevel } });
   await app.register(cors, { origin: opts.webOrigin });
   app.setErrorHandler(errorHandler);
+  await app.register(rateLimit, {
+    global: false,
+    errorResponseBuilder: (_req, ctx) => Object.assign(new Error(`rate limit exceeded; retry in ${ctx.after}`), { statusCode: 429 }),
+  });
 
   const startedAt = new Date().toISOString();
   app.get("/health", async () => ({
@@ -42,8 +47,11 @@ export async function buildServer(deps: AppDeps, opts: { webOrigin: string; logL
   });
   attachSockets(io, deps, { auth, access, arena });
   await arena.resumeAll();
+  const sweep = setInterval(() => void arena.sweepExpired().catch((err) => app.log.error({ err }, "room sweep failed")), deps.config.sweepIntervalMs);
+  sweep.unref();
 
   app.addHook("onClose", async () => {
+    clearInterval(sweep);
     arena.stop();
     io.close();
   });
