@@ -1,24 +1,25 @@
+/* Console + Arena working surfaces (layout by Member 1; Rampart tokens and skin). */
 input,
 select,
 textarea {
   width: 100%;
-  border: 1px solid var(--line);
-  background: var(--ink);
-  color: var(--paper);
-  border-radius: 6px;
+  border: 1px solid var(--rule);
+  background: var(--night);
+  color: var(--bone);
+  border-radius: 0;
   min-height: 44px;
   padding: 10px 12px;
   font-size: 13px;
 }
 input::placeholder {
-  color: var(--paper-dim);
+  color: var(--bone-dim);
 }
 select {
   max-width: 100%;
 }
 label {
   display: block;
-  color: var(--paper-dim);
+  color: var(--bone-dim);
   font-size: 12px;
 }
 label input,
@@ -26,16 +27,16 @@ label select {
   margin-top: 9px;
 }
 pre {
-  font-family: var(--mono);
+  font-family: var(--f-mono);
   font-size: 11px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  color: var(--paper-dim);
+  color: var(--bone-dim);
   line-height: 1.7;
 }
 code {
-  font-family: var(--mono);
-  color: var(--violet);
+  font-family: var(--f-mono);
+  color: var(--signal);
   font-size: 11px;
   overflow-wrap: anywhere;
 }
@@ -58,7 +59,7 @@ code {
   gap: 15px;
 }
 .empty svg {
-  color: var(--paper-dim);
+  color: var(--bone-dim);
 }
 .empty h3 {
   font-weight: 400;
@@ -71,11 +72,11 @@ code {
 .console-shell {
   display: grid;
   grid-template-columns: 190px 1fr;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--rule);
   min-height: calc(100vh - 100px);
 }
 .console-sidebar {
-  border-right: 1px solid var(--line);
+  border-right: 1px solid var(--rule);
   padding: 35px 22px;
   display: flex;
   flex-direction: column;
@@ -88,14 +89,14 @@ code {
 .side-link {
   padding: 13px 10px;
   font-size: 12px;
-  color: var(--paper-dim);
+  color: var(--bone-dim);
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: 0;
 }
 .side-link:hover,
 .side-link.selected {
-  border-color: var(--line);
-  color: var(--paper);
+  border-color: var(--rule);
+  color: var(--bone);
 }
 .sidebar-bottom {
   margin-top: auto;
@@ -103,7 +104,7 @@ code {
 }
 .sidebar-bottom .mono {
   font-size: 9px;
-  color: var(--paper-dim);
+  color: var(--bone-dim);
 }
 .sidebar-bottom p {
   font-size: 11px;
@@ -133,42 +134,42 @@ code {
   letter-spacing: -0.04em;
 }
 .status-badge {
-  font-family: var(--mono);
+  font-family: var(--f-mono);
   font-size: 10px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
+  border: 1px solid var(--rule);
+  border-radius: 0;
   padding: 8px 10px;
   display: inline-flex;
   gap: 9px;
   align-items: center;
-  color: var(--paper-dim);
+  color: var(--bone-dim);
 }
 .status-dot {
   display: inline-block;
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: var(--paper-dim);
+  background: var(--bone-dim);
   flex-shrink: 0;
 }
 .status-dot.live {
   background: #3ad389;
 }
 .connect-panel {
-  border: 1px solid var(--line);
-  border-radius: 16px;
+  border: 1px solid var(--rule);
+  border-radius: 0;
   padding: 48px;
   max-width: 680px;
   margin-block: 35px;
 }
 .connect-panel h2 {
-  font-family: var(--serif);
+  font-family: var(--f-display);
   font-size: 58px;
   line-height: 1.03;
   font-weight: 400;
 }
 .connect-panel h2 em {
-  color: var(--paper-dim);
+  color: var(--bone-dim);
 }
 .connect-panel > p {
   font-size: 14px;
@@ -183,9 +184,9 @@ code {
 }
 .connect-panel small {
   display: block;
-  font-family: var(--mono);
+  font-family: var(--f-mono);
   font-size: 9px;
-  color: var(--paper-dim);
+  color: var(--bone-dim);
   margin-top: 25px;
   line-height: 1.7;
 }
@@ -201,7 +202,7 @@ code {
 }
 .upload-button {
   position: relative;
-  color: var(--paper);
+  color: var(--bone);
   cursor: pointer;
   overflow: hidden;
 }
@@ -219,7 +220,7 @@ code {
 }
 .project-create {
   font-size: 12px;
-  color: var(--paper-dim);
+  color: var(--bone-dim);
   margin-top: 22px;
 }
 .project-create summary {
@@ -236,19 +237,19 @@ code {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   margin-block: 30px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
+  border: 1px solid var(--rule);
+  border-radius: 0;
   overflow: hidden;
 }
 .metric {
   padding: 23px 25px;
 }
 .metric + .metric {
-  border-left: 1px solid var(--line);
+  border-left: 1px solid var(--rule);
 }
 .metric > .mono {
   font-size: 9px;
-  color: var(--paper-dim);
+  color: var(--bone-dim);
   display: block;
 }
 .metric > strong {
@@ -260,8 +261,8 @@ code {
   margin-top: 17px;
 }
 .workspace-panel {
-  border: 1px solid var(--line);
-  border-radius: 16px;
+  border: 1px solid var(--rule);
+  border-radius: 0;
   overflow: hidden;
 }
 .panel-toolbar {
@@ -270,36 +271,36 @@ code {
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--rule);
   font-size: 11px;
-  color: var(--paper-dim);
+  color: var(--bone-dim);
 }
 .tabs {
   display: flex;
   gap: 20px;
 }
 .tabs button {
-  color: var(--paper-dim);
+  color: var(--bone-dim);
   background: transparent;
   border: 0;
   font-size: 12px;
   padding: 10px 0;
 }
 .tabs button[aria-selected="true"] {
-  color: var(--paper);
+  color: var(--bone);
 }
 .run-select {
   max-width: 270px;
 }
 .run-select select {
-  font-family: var(--mono);
+  font-family: var(--f-mono);
   font-size: 10px;
   min-height: 35px;
   margin: 0;
 }
 .graph-surface {
   height: 450px;
-  background: var(--ink);
+  background: var(--night);
 }
 .journal-surface {
   min-height: 350px;
@@ -308,34 +309,34 @@ code {
 }
 .panel-footer {
   padding: 15px 22px;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--rule);
   display: flex;
   justify-content: space-between;
-  color: var(--paper-dim);
+  color: var(--bone-dim);
   font-size: 9px;
 }
 .react-flow {
-  --xy-background-color: var(--ink);
-  --xy-node-background-color: var(--ink);
-  --xy-node-border: 1px solid var(--line-ink);
-  --xy-node-color: var(--paper);
-  --xy-edge-label-background-color: var(--ink);
-  --xy-edge-label-color: var(--paper-dim);
-  --xy-controls-button-background-color: var(--ink);
-  --xy-controls-button-color: var(--paper);
-  --xy-controls-button-border-color: var(--line-ink);
+  --xy-background-color: var(--night);
+  --xy-node-background-color: var(--night);
+  --xy-node-border: 1px solid var(--rule);
+  --xy-node-color: var(--bone);
+  --xy-edge-label-background-color: var(--night);
+  --xy-edge-label-color: var(--bone-dim);
+  --xy-controls-button-background-color: var(--night);
+  --xy-controls-button-color: var(--bone);
+  --xy-controls-button-border-color: var(--rule);
 }
 .react-flow__node-default {
   width: 210px;
-  border-radius: 6px;
+  border-radius: 0;
   text-align: left;
   padding: 17px;
 }
 .graph-label > span {
   display: block;
-  font-family: var(--mono);
+  font-family: var(--f-mono);
   font-size: 8px;
-  color: var(--violet);
+  color: var(--signal);
   margin-bottom: 8px;
 }
 .graph-label strong {
@@ -345,29 +346,29 @@ code {
 }
 .graph-label small {
   display: block;
-  font-family: var(--mono);
+  font-family: var(--f-mono);
   font-size: 8px;
-  color: var(--paper-dim);
+  color: var(--bone-dim);
   margin-top: 10px;
 }
 .react-flow__node-default.graph-alert {
   border-color: #ff9592;
 }
 .react-flow__edge-text {
-  font-family: var(--mono);
+  font-family: var(--f-mono);
   font-size: 8px;
 }
 .react-flow__attribution {
-  background: var(--ink) !important;
-  color: var(--paper-dim) !important;
+  background: var(--night) !important;
+  color: var(--bone-dim) !important;
 }
 .react-flow__controls {
   box-shadow: none !important;
-  border: 1px solid var(--line);
+  border: 1px solid var(--rule);
 }
 .event-list details {
   padding: 15px 22px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--rule);
 }
 .event-list summary {
   display: flex;
@@ -377,12 +378,12 @@ code {
   font-size: 12px;
 }
 .event-list summary .mono {
-  color: var(--violet);
+  color: var(--signal);
 }
 .event-list time {
   margin-left: auto;
-  color: var(--paper-dim);
-  font-family: var(--mono);
+  color: var(--bone-dim);
+  font-family: var(--f-mono);
   font-size: 10px;
 }
 .event-list pre {
@@ -390,7 +391,7 @@ code {
 }
 .node-inspector {
   padding: 22px;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--rule);
 }
 .node-inspector > div {
   display: flex;
@@ -405,8 +406,8 @@ code {
 }
 .incident-card {
   padding: 24px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
+  border: 1px solid var(--rule);
+  border-radius: 0;
   margin-bottom: 20px;
 }
 .incident-title {
@@ -416,7 +417,7 @@ code {
   flex-wrap: wrap;
 }
 .incident-title > .mono {
-  color: var(--paper-dim);
+  color: var(--bone-dim);
   font-size: 9px;
 }
 .incident-card h3 {
@@ -440,7 +441,7 @@ code {
 .approval {
   margin-top: 25px;
   padding-top: 25px;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--rule);
 }
 .approval h4 {
   font-weight: 500;
@@ -454,7 +455,7 @@ code {
 .console-footnote {
   margin-top: 28px;
   font-size: 9px;
-  color: var(--paper-dim);
+  color: var(--bone-dim);
 }
 .arena-page {
   padding-top: 50px;
@@ -465,23 +466,23 @@ code {
   justify-content: space-between;
   gap: 35px;
   padding-bottom: 40px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--rule);
 }
 .arena-heading h1 {
-  font-family: var(--serif);
+  font-family: var(--f-display);
   font-size: 105px;
   line-height: 1;
   font-weight: 400;
   letter-spacing: -0.03em;
 }
 .arena-heading h1 em {
-  color: var(--paper-dim);
+  color: var(--bone-dim);
 }
 .arena-heading .eyebrow {
   font-size: 9px;
 }
 .arena-label {
-  color: var(--paper-dim);
+  color: var(--bone-dim);
   font-size: 9px;
   max-width: 300px;
   line-height: 1.8;
@@ -493,13 +494,13 @@ code {
   padding-block: 65px;
 }
 .arena-entry h2 {
-  font-family: var(--serif);
+  font-family: var(--f-display);
   font-size: 65px;
   line-height: 1.03;
   font-weight: 400;
 }
 .arena-entry h2 em {
-  color: var(--paper-dim);
+  color: var(--bone-dim);
 }
 .arena-entry-copy > p {
   font-size: 14px;
@@ -517,7 +518,7 @@ code {
 }
 .slice-panel {
   align-self: center;
-  border: 1px solid var(--line);
+  border: 1px solid var(--rule);
   padding: 20px;
   overflow: hidden;
 }
@@ -527,7 +528,7 @@ code {
 }
 .slice-panel > p {
   font-size: 9px;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--rule);
   padding-top: 15px;
   line-height: 1.7;
 }
@@ -535,11 +536,11 @@ code {
   display: grid;
   place-items: center;
   height: 300px;
-  font-family: var(--mono);
+  font-family: var(--f-mono);
   font-size: 50px;
 }
 .host-setup {
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--rule);
   padding-top: 50px;
 }
 .host-setup > form {
@@ -560,16 +561,16 @@ code {
 }
 .arena-footer {
   font-size: 9px;
-  color: var(--paper-dim);
+  color: var(--bone-dim);
   padding-block: 45px;
   margin-top: 40px;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--rule);
   letter-spacing: 0.1em;
 }
 .round-bar {
   display: grid;
   grid-template-columns: 2fr 1fr 1fr 1fr;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--rule);
   padding-block: 25px;
   gap: 25px;
 }
@@ -587,11 +588,11 @@ code {
 }
 .room-join {
   padding: 35px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--rule);
   margin-top: 30px;
 }
 .room-join h2 {
-  font-family: var(--serif);
+  font-family: var(--f-display);
   font-size: 44px;
   font-weight: 400;
 }
@@ -605,11 +606,11 @@ code {
   align-items: center;
   justify-content: space-between;
   gap: 40px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--rule);
   margin-block: 35px;
 }
 .host-panel h2 {
-  font-family: var(--serif);
+  font-family: var(--f-display);
   font-size: 42px;
   font-weight: 400;
 }
@@ -624,7 +625,7 @@ code {
 .arena-workspace {
   display: grid;
   grid-template-columns: 1fr 255px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--rule);
   margin-top: 30px;
 }
 .arena-graph {
@@ -634,7 +635,7 @@ code {
   height: 420px;
 }
 .players-panel {
-  border-left: 1px solid var(--line);
+  border-left: 1px solid var(--rule);
   padding: 25px;
 }
 .players-panel .eyebrow {
@@ -647,7 +648,7 @@ code {
   display: flex;
   align-items: center;
   gap: 10px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--rule);
   padding: 18px 0;
 }
 .player-row strong {
@@ -657,7 +658,7 @@ code {
 .player-row > .mono {
   margin-left: auto;
   font-size: 7px;
-  color: var(--paper-dim);
+  color: var(--bone-dim);
 }
 .cards-section {
   margin-top: 65px;
@@ -671,7 +672,7 @@ code {
   gap: 16px;
 }
 .action-card {
-  border: 1px solid var(--line);
+  border: 1px solid var(--rule);
   padding: 25px;
   display: flex;
   flex-direction: column;
@@ -705,12 +706,12 @@ code {
 }
 .action-result {
   padding: 25px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--rule);
   margin-bottom: 30px;
 }
 .action-result strong {
-  font-family: var(--mono);
-  color: var(--violet);
+  font-family: var(--f-mono);
+  color: var(--signal);
   font-size: 12px;
 }
 .action-result p {
@@ -727,11 +728,11 @@ code {
 }
 .evidence-panel article {
   padding: 20px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--rule);
 }
 .evidence-panel .mono {
   font-size: 9px;
-  color: var(--violet);
+  color: var(--signal);
 }
 .evidence-panel p {
   font-size: 13px;
@@ -740,10 +741,10 @@ code {
 .reveal-panel {
   margin-top: 50px;
   padding-top: 40px;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--rule);
 }
 .reveal-panel h2 {
-  font-family: var(--serif);
+  font-family: var(--f-display);
   font-size: 64px;
   font-weight: 400;
 }
@@ -797,7 +798,7 @@ code {
   }
   .console-sidebar {
     border-right: 0;
-    border-bottom: 1px solid var(--line);
+    border-bottom: 1px solid var(--rule);
     padding: 12px 20px;
     flex-direction: row;
     align-items: center;
@@ -837,10 +838,10 @@ code {
   }
   .metric:nth-child(3) {
     border-left: 0;
-    border-top: 1px solid var(--line);
+    border-top: 1px solid var(--rule);
   }
   .metric:nth-child(4) {
-    border-top: 1px solid var(--line);
+    border-top: 1px solid var(--rule);
   }
   .metric > .mono {
     font-size: 8px;
@@ -952,7 +953,7 @@ code {
   }
   .players-panel {
     border-left: 0;
-    border-top: 1px solid var(--line);
+    border-top: 1px solid var(--rule);
     padding: 22px;
   }
   .arena-graph .graph-surface {
@@ -982,7 +983,7 @@ code {
   }
   .reveal-panel .metric + .metric {
     border-left: 0;
-    border-top: 1px solid var(--line);
+    border-top: 1px solid var(--rule);
   }
   .arena-footer {
     line-height: 1.9;
@@ -999,4 +1000,311 @@ code {
   .mobile-disconnect {
     display: inline-flex;
   }
+}
+
+/* ── Bastion console/arena refinements ── */
+.console-shell {
+  margin-top: 74px;
+  background: var(--night);
+  color: var(--bone);
+}
+.console-main {
+  padding-block: 44px;
+}
+.console-sidebar {
+  padding-top: 44px;
+}
+.workspace-heading h1 {
+  font-family: var(--f-display);
+  font-weight: 800;
+  font-size: 48px;
+  letter-spacing: -0.01em;
+  line-height: 1;
+}
+.workspace-controls,
+label,
+select,
+input,
+.tabs,
+.project-create {
+  font-family: var(--f-mono);
+}
+.connect-panel {
+  border: 0;
+  border-top: 3px solid var(--signal);
+  border-radius: 0;
+  padding: 35px 0;
+  max-width: 650px;
+}
+.connect-panel h2 {
+  font-family: var(--f-display);
+  font-size: 92px;
+  font-weight: 900;
+  line-height: 1;
+  margin-bottom: 35px;
+  letter-spacing: -0.015em;
+}
+.connect-panel .eyebrow {
+  color: var(--signal);
+}
+.connect-panel form {
+  max-width: 440px;
+}
+.connect-panel input {
+  border-radius: 0;
+  border-bottom: 2px solid var(--bone);
+  min-height: 50px;
+  background: var(--night-2);
+}
+.empty svg {
+  width: 50px;
+  height: 50px;
+  color: var(--signal);
+}
+.empty h3 {
+  font-family: var(--f-display);
+  font-size: 30px;
+  font-weight: 700;
+}
+.empty p {
+  display: none;
+}
+.status-badge {
+  border-radius: 0;
+  font-size: 9px;
+}
+.side-link {
+  font-family: var(--f-mono);
+  font-size: 11px;
+  border-radius: 0;
+}
+.side-link.selected {
+  border-color: transparent;
+  border-left: 3px solid var(--signal);
+  background: rgba(243, 231, 207, 0.035);
+}
+.metric-row {
+  border: 0;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  border-radius: 0;
+}
+.metric > strong {
+  font-family: var(--f-display);
+  font-size: 52px;
+  font-weight: 700;
+}
+.workspace-panel {
+  border-radius: 0;
+  background: var(--night-2);
+}
+.panel-toolbar {
+  background: var(--night-2);
+}
+.graph-surface {
+  background: var(--night);
+}
+.tabs button[aria-selected="true"] {
+  color: var(--signal);
+}
+.react-flow {
+  --xy-background-color: var(--night);
+  --xy-node-background-color: var(--night-2);
+  --xy-node-border: 1px solid var(--rule);
+  --xy-node-color: var(--bone);
+  --xy-edge-label-background-color: var(--night);
+  --xy-edge-label-color: var(--bone-dim);
+  --xy-controls-button-background-color: var(--night-2);
+  --xy-controls-button-color: var(--bone);
+  --xy-controls-button-border-color: var(--rule);
+}
+.react-flow__node-default {
+  border-radius: 0;
+}
+.graph-label strong {
+  font-family: var(--f-mono);
+  font-size: 11px;
+}
+.graph-label > span {
+  color: var(--flare);
+}
+.graph-label small {
+  color: var(--bone-dim);
+}
+.react-flow__attribution {
+  background: var(--night) !important;
+  color: var(--bone-dim) !important;
+}
+.react-flow__node-default.graph-alert {
+  border-color: var(--signal);
+}
+.incident-card h3,
+.evidence-panel h3,
+.approval h4 {
+  font-family: var(--f-display);
+  font-weight: 700;
+  font-size: 28px;
+}
+.error-box {
+  border-color: var(--signal);
+  color: var(--flare);
+  font-family: var(--f-mono);
+  font-size: 12px;
+}
+.console-footnote {
+  display: none;
+}
+.sidebar-bottom > p {
+  font-family: var(--f-mono);
+}
+.arena-page {
+  max-width: none;
+  background: var(--night);
+  color: var(--bone);
+  padding-top: 125px;
+  padding-bottom: 30px;
+  min-height: 100svh;
+}
+.arena-heading h1 {
+  font-family: var(--f-display);
+  font-size: clamp(80px, 11vw, 165px);
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  line-height: 0.9;
+}
+.arena-heading h1 em {
+  font-style: normal;
+  color: var(--signal);
+}
+.arena-heading .eyebrow {
+  color: var(--bone-dim);
+}
+.arena-label {
+  color: var(--signal);
+}
+.arena-entry {
+  padding-block: 55px;
+}
+.arena-entry h2 {
+  font-family: var(--f-display);
+  font-size: clamp(58px, 6vw, 90px);
+  font-weight: 800;
+  line-height: 0.94;
+  letter-spacing: -0.01em;
+}
+.arena-entry h2 em {
+  font-style: normal;
+  color: var(--signal);
+}
+.arena-entry-copy > p {
+  display: none;
+}
+.join-form {
+  margin-top: 35px;
+}
+.slice-panel {
+  border-color: var(--rule);
+  background: var(--night);
+  border-radius: 0;
+}
+.slice-panel > p {
+  font-size: 10px;
+}
+.host-setup .eyebrow {
+  color: var(--signal);
+}
+.host-setup h2,
+.host-panel h2,
+.room-join h2 {
+  font-family: var(--f-display);
+  font-size: 48px;
+  font-weight: 800;
+  line-height: 1;
+}
+.host-setup > form > p,
+.host-panel p,
+.room-join > p {
+  display: none;
+}
+.host-setup .inline-form {
+  margin-top: 20px;
+}
+.host-setup form > label {
+  margin-top: 25px;
+}
+.room-join {
+  border-radius: 0;
+}
+.host-panel {
+  border-radius: 0;
+}
+.host-panel img {
+  border-radius: 0;
+}
+.arena-workspace {
+  border-radius: 0;
+  overflow: hidden;
+}
+.round-bar strong {
+  font-family: var(--f-display);
+  font-size: 36px;
+  font-weight: 800;
+  line-height: 1;
+}
+.round-bar > div:first-child strong {
+  font-family: var(--f-mono);
+  font-size: 10px;
+  font-weight: 400;
+}
+.players-panel {
+  background: var(--night-2);
+}
+.player-row {
+  font-family: var(--f-mono);
+}
+.action-cards {
+  gap: 20px;
+}
+.action-card {
+  border-radius: 0;
+  border-top: 3px solid var(--signal);
+  background: var(--night-2);
+  padding: 26px;
+}
+.action-card h3 {
+  font-family: var(--f-display);
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1.1;
+  min-height: 75px;
+}
+.action-card .eyebrow {
+  color: var(--signal);
+}
+.action-card select {
+  border-radius: 0;
+  background: var(--night);
+}
+.cards-section .section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  margin-bottom: 30px;
+}
+.cards-section h2 {
+  font-family: var(--f-display);
+  font-size: 72px;
+  font-weight: 800;
+}
+.cards-section .section-heading > p {
+  display: none;
+}
+.reveal-panel h2 {
+  font-family: var(--f-display);
+  font-size: 86px;
+  font-weight: 900;
+  color: var(--signal);
+}
+.arena-footer {
+  display: none;
 }

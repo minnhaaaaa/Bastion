@@ -10,6 +10,7 @@ import {
 } from "@bastion/contracts";
 import { api } from "../lib/api";
 import { useSession } from "../lib/session";
+import { usePageIntro } from "../lib/usePageIntro";
 import { useRun } from "../lib/useRun";
 import { RunGraph } from "../components/RunGraph";
 import {
@@ -21,6 +22,7 @@ import {
   Header,
 } from "../components/ui";
 export function Console({ runId }: { runId?: string }) {
+  const intro = usePageIntro<HTMLElement>(".console-sidebar > *, .workspace-heading, .metric-row, .workspace-panel, .connect-panel");
   const { token, setToken } = useSession();
   const client = useQueryClient();
   const [selectedRun, setSelectedRun] = useState(runId);
@@ -104,7 +106,7 @@ export function Console({ runId }: { runId?: string }) {
   return (
     <>
       <Header active="dashboard" />
-      <main id="main" tabIndex={-1} className="console-shell">
+      <main ref={intro} id="main" tabIndex={-1} className="console-shell">
         <aside className="console-sidebar">
           <span className="eyebrow">WORKSPACE</span>
           <a href="/dashboard" className="side-link selected">

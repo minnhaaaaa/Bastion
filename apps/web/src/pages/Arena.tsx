@@ -15,7 +15,7 @@ import {
   type ServerToClientEvents,
   type ClientToServerEvents,
 } from "@bastion/contracts";
-import SliceBlade from "../components/originkit/ui/slice-blade";
+import { Watchtower } from "../components/brand/Watchtower";
 import {
   Arrow,
   Button,
@@ -23,12 +23,12 @@ import {
   Empty,
   ErrorBox,
   Header,
-  useReducedMotion,
 } from "../components/ui";
 import { RunGraph } from "../components/RunGraph";
 import { api } from "../lib/api";
 import { env } from "../env";
 import { useSession } from "../lib/session";
+import { usePageIntro } from "../lib/usePageIntro";
 import { useRun } from "../lib/useRun";
 type RoomSession = {
   token: string;
@@ -38,7 +38,7 @@ type RoomSession = {
 const sessions = new Map<string, RoomSession>();
 type PublicRoom = ArenaPhaseUpdate & { presence: RoomPresence };
 export function Arena({ roomId }: { roomId?: string }) {
-  const reduced = useReducedMotion();
+  const intro = usePageIntro<HTMLElement>(".arena-heading > *, .arena-entry > *, .host-setup, .round-bar, .room-join, .host-panel, .connect-panel");
   const { token } = useSession();
   const [session, setSession] = useState(
     roomId ? sessions.get(roomId) : undefined,
@@ -200,7 +200,7 @@ export function Arena({ roomId }: { roomId?: string }) {
   return (
     <>
       <Header active="arena" />
-      <main id="main" tabIndex={-1} className="arena-page container">
+      <main ref={intro} id="main" tabIndex={-1} className="arena-page container">
         <div className="arena-heading">
           <div>
             <span className="eyebrow">BASTION / ARENA</span>
@@ -254,23 +254,8 @@ export function Arena({ roomId }: { roomId?: string }) {
                 </form>
               </div>
               <div className="slice-panel">
-                <span className="eyebrow">WARM-UP</span>
-                {reduced ? (
-                  <div className="slice-still">ARENA</div>
-                ) : (
-                  <SliceBlade
-                    title="BASTION"
-                    ink="#f3e7cf"
-                    accent="#f23005"
-                    background="#0c0a07"
-                    style={{
-                      minWidth: 0,
-                      minHeight: 0,
-                      width: "100%",
-                      height: 340,
-                    }}
-                  />
-                )}
+                <span className="eyebrow">Sentry</span>
+                <Watchtower />
               </div>
             </div>
             <section className="host-setup">

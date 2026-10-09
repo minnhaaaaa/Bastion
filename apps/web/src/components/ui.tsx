@@ -1,9 +1,9 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Logo } from "./wenvy/Logo";
-import { Masthead } from "./wenvy/Masthead";
+import { Emblem } from "./brand/Emblem";
+import { SiteFooter, SiteHeader } from "./site/SiteHeader";
 import { useSession } from "../lib/session";
 export function Mark({ className = "" }: { className?: string }) {
-  return <Logo className={className} />;
+  return <Emblem className={className} />;
 }
 export function Arrow({ diagonal = false }: { diagonal?: boolean }) {
   return <span aria-hidden="true">{diagonal ? "↗" : "→"}</span>;
@@ -60,27 +60,20 @@ export function useReducedMotion() {
   return reduced;
 }
 export function Header({ active = "" }: { active?: string }) {
-  return <Masthead active={active} />;
+  return <SiteHeader active={active} />;
 }
 export function Footer() {
-  return (
-    <footer className="foot">
-      <a href="/" className="foot__mark">
-        <Logo className="foot__logo" />
-        bastion
-      </a>
-      <span className="foot__note">trace · contain · recover</span>
-      <a href="/architecture">architecture ↗</a>
-    </footer>
-  );
+  return <SiteFooter />;
 }
 export function Connect() {
   const { setToken } = useSession();
   const [value, setValue] = useState("");
   return (
     <div className="connect-panel">
-      <span className="eyebrow">OPERATOR ACCESS</span>
-      <h2>Connect.</h2>
+      <span className="eyebrow">Operator access</span>
+      <h2>
+        Raise the <em>gate.</em>
+      </h2>
       <form
         onSubmit={(event) => {
           event.preventDefault();
@@ -97,7 +90,7 @@ export function Connect() {
           autoComplete="off"
         />
         <Button type="submit">
-          Open workspace <Arrow />
+          Enter console <Arrow />
         </Button>
       </form>
     </div>
