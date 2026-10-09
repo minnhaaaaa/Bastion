@@ -7,6 +7,9 @@ import { AuthStorage, DefaultResourceLoader, ModelRegistry, SessionManager, Sett
 import type { AgentSession, ToolDefinition } from "@mariozechner/pi-coding-agent";
 import type { TSchema } from "@sinclair/typebox";
 import type { AgentRunRequest, AgentRuntimeAdapter, RuntimeEvent, ToolCall, ToolGateway } from "@bastion/contracts";
+import { privatePiTraceWriter, type PiTraceRecord } from "./trace";
+export { privatePiTraceWriter } from "./trace";
+export type { PiTraceRecord } from "./trace";
 
 export type GatewayTool = { name: string; label: string; description: string; parameters: TSchema };
 export type PiTaskContext = {
@@ -16,7 +19,7 @@ export type PiTaskContext = {
   prompt: string;
   outputName: string;
 };
-export type PiConfig = { provider: string; model: string; baseUrl: string; apiKey: string; agentDir: string; timeoutMs: number };
+export type PiConfig = { provider: string; model: string; baseUrl: string; apiKey: string; agentDir: string; timeoutMs: number; traceDirectory?: string };
 export function piConfigFromEnv(env: NodeJS.ProcessEnv = process.env): PiConfig {
   const required = (key: string) => { const value = env[key]; if (!value?.trim()) throw new Error(`Missing ${key}`); return value; };
   const timeoutMs = Number(required("PI_TIMEOUT_MS"));
@@ -24,7 +27,7 @@ export function piConfigFromEnv(env: NodeJS.ProcessEnv = process.env): PiConfig 
   const baseUrl = required("PI_BASE_URL");
   const url = new URL(baseUrl);
   if (!["https:", "http:"].includes(url.protocol) || url.username || url.password) throw new Error("Invalid PI_BASE_URL");
-  return { provider: required("PI_PROVIDER"), model: required("PI_MODEL"), baseUrl, apiKey: required("PI_API_KEY"), agentDir: required("PI_AGENT_DIR"), timeoutMs };
+  return { provider: required("PI_PROVIDER"), model: required("PI_MODEL"), baseUrl, apiKey: required("PI_API_KEY"), agentDir: required("PI_AGENT_DIR"), timeoutMs, ...(env.PI_TRACE_DIRECTORY?.trim() ? { traceDirectory: env.PI_TRACE_DIRECTORY } : {}) };
 }
 
 export function gatewayTools(tools: GatewayTool[], gateway: ToolGateway, identity: Omit<ToolCall, "tool" | "args">): ToolDefinition[] {
@@ -36,7 +39,7 @@ export function gatewayTools(tools: GatewayTool[], gateway: ToolGateway, identit
   } }));
 }
 
-type LiveSession = { session: AgentSession; context: PiTaskContext; sinks: Set<(e: RuntimeEvent) => void>; started: boolean; stopped: boolean };
+type LiveSession = { session: AgentSession; context: PiTaskContext; runId: string; sinks: Set<(e: RuntimeEvent) => void>; started: boolean; stopped: boolean };
 export class PiRuntimeAdapter implements AgentRuntimeAdapter {
   private readonly sessions = new Map<string, LiveSession>();
   constructor(private readonly options: {
@@ -45,6 +48,7 @@ export class PiRuntimeAdapter implements AgentRuntimeAdapter {
     gateway: ToolGateway;
     /** Loads the scheduler's authoritative execution context, including brokered input content. */
     taskContext(req: AgentRunRequest): Promise<PiTaskContext>;
+    trace?(record: PiTraceRecord): Promise<void>;
   }) {}
   async startTask(req: AgentRunRequest): Promise<{ sessionId: string }> {
     const context = await this.options.taskContext(req);
@@ -66,7 +70,7 @@ export class PiRuntimeAdapter implements AgentRuntimeAdapter {
       settingsManager, resourceLoader, sessionManager: SessionManager.inMemory(context.cwd),
       noTools: "builtin", tools: tools.map(t => t.name), customTools: tools });
     if (session.getActiveToolNames().some(name => !tools.some(t => t.name === name))) { session.dispose(); throw new Error("Unmediated Pi tool enabled"); }
-    this.sessions.set(session.sessionId, { session, context, sinks: new Set(), started: false, stopped: false });
+    this.sessions.set(session.sessionId, { session, context, runId: req.runId, sinks: new Set(), started: false, stopped: false });
     return { sessionId: session.sessionId };
   }
   subscribe(sessionId: string, sink: (event: RuntimeEvent) => void): () => void {
@@ -86,7 +90,16 @@ export class PiRuntimeAdapter implements AgentRuntimeAdapter {
     let timedOut = false;
     let text = "";
     let failed = false;
+    const started = performance.now();
+    const trace = this.options.trace ?? (this.options.config.traceDirectory ? privatePiTraceWriter(this.options.config.traceDirectory) : undefined);
+    let traces = Promise.resolve();
+    const record = (kind: PiTraceRecord["kind"], data: unknown) => {
+      if (trace) traces = traces.then(() => trace({ at: new Date().toISOString(), runId: live.runId, executionId: live.context.executionId, sessionId: live.session.sessionId, kind, data }));
+      // Attach immediately: observer failure is surfaced when the trace queue is drained.
+      void traces.catch(() => {});
+    };
     const unsubscribe = live.session.subscribe(event => {
+      if (event.type === "tool_execution_start" || event.type === "tool_execution_end") record("tool", event);
       if (event.type === "message_end" && event.message.role === "assistant") {
         if (event.message.stopReason === "error" || event.message.stopReason === "aborted") failed = true;
         text = event.message.content.filter(c => c.type === "text").map(c => c.text).join("\n");
@@ -95,11 +108,19 @@ export class PiRuntimeAdapter implements AgentRuntimeAdapter {
     const timer = setTimeout(() => { timedOut = true; live.stopped = true; void live.session.abort(); }, this.options.config.timeoutMs);
     try {
       if (live.stopped) throw new Error("Stopped");
+      record("prompt", { provider: this.options.config.provider, model: this.options.config.model, baseUrl: this.options.config.baseUrl, text: live.context.prompt });
+      await traces;
       await live.session.prompt(live.context.prompt, { expandPromptTemplates: false });
       if (live.stopped || failed || !text) throw new Error("No successful output");
+      record("completed", { ok: true, elapsedMs: performance.now() - started, statistics: live.session.getSessionStats() });
+      await traces;
       emit({ kind: "output", name: live.context.outputName, content: text });
       emit({ kind: "finished", ok: true });
-    } catch { emit({ kind: "finished", ok: false, error: timedOut ? "TIMEOUT" : live.stopped ? "STOPPED" : "ERROR" }); }
+    } catch {
+      record("completed", { ok: false, elapsedMs: performance.now() - started, statistics: live.session.getSessionStats() });
+      await traces.catch(() => {});
+      emit({ kind: "finished", ok: false, error: timedOut ? "TIMEOUT" : live.stopped ? "STOPPED" : "ERROR" });
+    }
     finally { clearTimeout(timer); unsubscribe(); live.session.dispose(); this.sessions.delete(live.session.sessionId); }
   }
 }

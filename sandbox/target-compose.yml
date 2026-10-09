@@ -1,0 +1,26 @@
+services:
+  target:
+    build:
+      context: ..
+      dockerfile: sandbox/Dockerfile
+      args:
+        SANDBOX_NODE_IMAGE: ${SANDBOX_NODE_IMAGE:?required}
+    command: [node, /app/target.mjs]
+    environment:
+      SANDBOX_TARGET_ROOT: ${SANDBOX_TARGET_ROOT:?required}
+      SANDBOX_TARGET_AUDIT_PATH: ${SANDBOX_TARGET_AUDIT_PATH:?required}
+      SANDBOX_TARGET_PORT: ${SANDBOX_TARGET_PORT:?required}
+      SANDBOX_TARGET_BIND_HOST: ${SANDBOX_TARGET_BIND_HOST:?required}
+      SANDBOX_TARGET_MAX_BYTES: ${SANDBOX_TARGET_MAX_BYTES:?required}
+    volumes:
+      - "${SANDBOX_TARGET_CONTENT_DIRECTORY:?required}:${SANDBOX_TARGET_ROOT:?required}:ro"
+      - "${SANDBOX_TARGET_AUDIT_DIRECTORY:?required}:${SANDBOX_TARGET_AUDIT_MOUNT:?required}"
+    networks:
+      isolated:
+        aliases: ["${SANDBOX_TARGET_HOST:?required}"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: ${SANDBOX_PIDS_LIMIT:?required}
+    mem_limit: ${SANDBOX_MEMORY_LIMIT:?required}
+    cpus: ${SANDBOX_CPUS:?required}

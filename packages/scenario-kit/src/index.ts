@@ -7,6 +7,8 @@
  */
 import { WorkflowDefinition, newId } from "@bastion/contracts";
 import type { ArtifactBroker, EventJournal, Run, RunSnapshot, Scheduler, TaskSpec, WorkflowRepository } from "@bastion/contracts";
+export { verifySelectedClaims, verifyToolAcceptanceChecks } from "./verification";
+export type { SelectedClaim, ToolAcceptanceCheck } from "./verification";
 
 export type VerificationCheck = { name: string; passed: boolean; detail?: string };
 export class WorkflowRunner {

@@ -62,7 +62,7 @@ Rules (unchanged): **zero hardcoded data** (TEAM_PLAN.md → Rule #1), `packages
 ### B2. First real model run
 - [ ] Configure a Pi provider (`PI_*`), set `AGENT_RUNTIME=enabled`, and run a submitted workflow end to end.
 - [ ] Record what really happened: prompts, tool calls, denials, timing, tokens if available. Repeat several times and write down the variance, since LLM runs aren't deterministic.
-- [ ] Decide what to do about the **deprecated Pi package**: stay pinned at 0.73.1, or move to its successor. Write the decision in `sandbox/README.md`.
+- [x] Decide what to do about the **deprecated Pi package**: stay pinned at 0.73.1, or move to its successor. Write the decision in `sandbox/README.md`.
 - **Done when:** a real-model protected run and a real-model baseline run both complete on the shared dev API.
 
 ### B3. Tool-call approval path (`REQUIRE_APPROVAL`)
@@ -74,7 +74,9 @@ Rules (unchanged): **zero hardcoded data** (TEAM_PLAN.md → Rule #1), `packages
 - [ ] Let workflows declare their own acceptance checks, such as an allowed `proc.exec` test command. The verifier runs these on top of the state-based checks in `apps/api/src/runtime/verification.ts`. This needs an additive `WorkflowDefinition` field, agreed with Member 3.
 
 ### B5. Remaining attack cards (P1)
-- [ ] Confirm `REDIRECT_TOOL` and `LEAK_SECRET` work end to end once a workflow defines payloads for them. The runner already handles them generically, so this is about validation and tests, not new code paths.
+- [x] Confirm `REDIRECT_TOOL` and `LEAK_SECRET` work end to end once a workflow defines payloads for them. The runner already handles them generically, so this is about validation and tests, not new code paths.
+
+Member 2 evidence: `sandbox/README.md` records the exact dependency decision, real target and audit tests, opt-in Docker network test, private Pi traces and repeated-model-run tooling. B5 has persisted protected/baseline end-to-end tests with a test-only scripted LLM. B1/B2 live gates remain open: Docker's engine did not start and no live environment/workflow was supplied. B3/B4 implementation helpers and tests are prepared; `sandbox/CONTRACT_PROPOSAL.md` is the concrete review item for all-three acknowledgement before shared-schema changes and Member 3's approval route/store/waiter wiring.
 
 ---
 

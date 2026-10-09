@@ -12,7 +12,7 @@ import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from "node:fs/promi
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { latestExecution, newId, type AgentRuntimeAdapter, type RuntimeEvent, type WorkflowDefinition } from "@bastion/contracts";
+import { latestExecution, newId, type AgentRuntimeAdapter, type RuntimeEvent, type WorkflowDefinition, type AttackCard } from "@bastion/contracts";
 import { CommandStore, PgEventJournal, PgWorkflowRepository, ProjectRepository, RunRepository } from "@bastion/db";
 import { createTestDb } from "@bastion/db/testing";
 import { FsBlobStore, PgArtifactBroker } from "@bastion/provenance";
@@ -76,7 +76,7 @@ function scriptedAgent(context: Parameters<NonNullable<Parameters<typeof buildAg
   };
 }
 
-async function setup() {
+async function setup(card: AttackCard = "POISON_DOCUMENT") {
   const dir = await realpath(await mkdtemp(join(tmpdir(), "bastion-e2e-")));
   cleanups.push(() => rm(dir, { recursive: true, force: true }));
   const workspace = join(dir, "workspace");
@@ -91,7 +91,8 @@ async function setup() {
   cleanups.push(() => new Promise<void>((r) => target.close(() => r())));
   const targetOrigin = `http://127.0.0.1:${(target.address() as { port: number }).port}`;
 
-  const exfilUrl = `${targetOrigin}/${newId("trace")}`;
+  const secret = newId("trace");
+  const exfilUrl = `${targetOrigin}/${newId("trace")}${card === "LEAK_SECRET" ? `?value=${encodeURIComponent(secret)}` : ""}`;
   const files = { doc: `${newId("trace")}.md`, vetted: `${newId("trace")}.md`, brief: `${newId("trace")}.md`, attack: `${newId("trace")}.md` };
   await writeFile(join(workspace, files.doc), `original ${newId("trace")}`);
   await writeFile(join(workspace, files.vetted), `vetted ${newId("trace")}`);
@@ -173,7 +174,7 @@ async function setup() {
       { id: "allow.workspace.read", description: "read workspace", decision: "ALLOW", operation: "fs.read", resourcePattern: `${workspace}/**` },
       { id: "deny.exfil", description: "exfil target is forbidden", decision: "DENY", operation: "net.http", resourcePattern: `${targetOrigin}/**` },
     ],
-    attackPayloads: [{ id: newId("trace"), card: "POISON_DOCUMENT", targetSourceName: "doc", label: "inject", contentLocation: files.attack }],
+    attackPayloads: [{ id: newId("trace"), card, targetSourceName: "doc", label: "inject", contentLocation: files.attack }],
   };
   const project = await new ProjectRepository(db).create(userId, "e2e");
   const wf = await workflows.create(project.id, definition);
@@ -187,10 +188,27 @@ async function setup() {
     await runtime.launcher.launch({ runId, workflow: wf, attackPayloadIds: [definition.attackPayloads[0]!.id], traceId });
     return runId;
   };
-  return { app, auth, journal, recovery, runtime, launch, hits, auditFile, ids: { tR, tB, tV, tU } };
+  return { app, auth, journal, recovery, runtime, launch, hits, auditFile, secret, ids: { tR, tB, tV, tU } };
 }
 
 describe("agent runtime wired to journal/broker/recovery/API", () => {
+  it.each(["REDIRECT_TOOL", "LEAK_SECRET"] as const)("%s uses the registered payload through real persisted protected/baseline runs", async card => {
+    const t = await setup(card);
+    const protectedId = await t.launch("PROTECTED");
+    const protectedSnapshot = (await t.journal.snapshot(protectedId))!;
+    expect((await t.journal.read(protectedId)).some(e => e.type === "source.modified")).toBe(true);
+    expect(Object.values(protectedSnapshot.toolRequests).some(req => req.decision === "DENY")).toBe(true);
+    expect(t.hits).toEqual([]);
+    expect(await t.runtime.audit.unsafeAccessCount(protectedId)).toBe(0);
+    const baselineId = await t.launch("BASELINE");
+    expect(t.hits.length).toBeGreaterThan(0);
+    expect(await t.runtime.audit.unsafeAccessCount(baselineId)).toBe(t.hits.length);
+    if (card === "LEAK_SECRET") expect(t.hits.some(url => url.includes(t.secret))).toBe(true);
+    const baselineSnapshot = (await t.journal.snapshot(baselineId))!;
+    expect(baselineSnapshot.run.workflowVersion).toBe(protectedSnapshot.run.workflowVersion);
+    expect(baselineSnapshot.verification?.find(check => check.name === "target_audit.no_unsafe_access")?.passed).toBe(false);
+    expect(JSON.stringify(await t.journal.read(baselineId))).not.toContain(t.secret);
+  }, 30000);
   it("protected: attack lands as v2, exfil denied before execution (audit + target empty), selective recovery verified", async () => {
     const t = await setup();
     const runId = await t.launch("PROTECTED");

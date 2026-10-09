@@ -1,7 +1,7 @@
 import { it, expect } from "vitest";
 import { fork } from "node:child_process";
 import { createServer } from "node:net";
-import { mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve, relative, isAbsolute } from "node:path";
 import { Type } from "@sinclair/typebox";
@@ -13,7 +13,9 @@ import { MemoryBroker, MemoryJournal } from "../../../tests/member2-helpers";
 
 it("gateway-backed Pi tool denial leaves the REAL worker access audit empty", async () => {
   const directory = await mkdtemp(join(tmpdir(), "bastion-audit-"));
-  const file = join(directory, crypto.randomUUID()); const audit = join(directory, crypto.randomUUID());
+  const workspace = join(directory, "workspace");
+  await mkdir(workspace);
+  const file = join(workspace, crypto.randomUUID()); const audit = join(directory, crypto.randomUUID());
   await writeFile(file, crypto.randomUUID()); await writeFile(audit, "");
   const canonicalFile = await realpath(file);
   const socket = createServer(); await new Promise<void>(resolve => socket.listen(0, "127.0.0.1", resolve));
@@ -21,7 +23,7 @@ it("gateway-backed Pi tool denial leaves the REAL worker access audit empty", as
   await new Promise<void>(resolve => socket.close(() => resolve()));
   const token = crypto.randomUUID();
   const worker = fork(resolve("sandbox/worker.mjs"), [], { silent: true, env: {
-    ...process.env, SANDBOX_ROOT: directory, SANDBOX_AUDIT_PATH: audit, SANDBOX_TOKEN: token,
+    ...process.env, SANDBOX_ROOT: workspace, SANDBOX_AUDIT_PATH: audit, SANDBOX_TOKEN: token,
     SANDBOX_HTTP_ORIGINS: "[]", SANDBOX_EXEC_COMMANDS: "[]", SANDBOX_TIMEOUT_MS: "1000", SANDBOX_MAX_BYTES: "65536", SANDBOX_PORT: String(port), SANDBOX_BIND_HOST: "127.0.0.1",
   } });
   try {
@@ -32,7 +34,7 @@ it("gateway-backed Pi tool denial leaves the REAL worker access audit empty", as
     });
     const call: ToolCall = { runId: newId("run"), taskId: newId("task"), agentId: newId("agent"), executionId: newId("exec"), traceId: newId("trace"), tool: crypto.randomUUID(), args: { path: file } };
     const definition: WorkflowDefinition = { name: crypto.randomUUID(), agents: [{ id: call.agentId, role: "RESEARCH", capabilities: [] }], tasks: [{ id: call.taskId, agentId: call.agentId, title: crypto.randomUUID(), declaredDeps: [], sourceNames: [], produces: crypto.randomUUID(), retryPolicy: { maxAttempts: 1, idempotent: true } }], sources: [], attackPayloads: [], policyRules: [] };
-    const client = new SandboxClient({ url: `http://127.0.0.1:${port}`, token, hostRoot: directory, workerRoot: "/workspace", timeoutMs: 1000, toolOperations: { [call.tool]: "fs.read" } });
+    const client = new SandboxClient({ url: `http://127.0.0.1:${port}`, token, hostRoot: workspace, workerRoot: "/workspace", timeoutMs: 1000, toolOperations: { [call.tool]: "fs.read" } });
     let mode: "PROTECTED" | "BASELINE" = "PROTECTED";
     const journal = new MemoryJournal();
     const gateway = new PolicyToolGateway({ journal, broker: new MemoryBroker(), context: async () => ({ policy: new WorkflowPolicyEngine(definition), mode, active: true, inputClassification: "PUBLIC", inputVersionIds: [] }), normalize: async () => ({ operation: "fs.read", resource: canonicalFile }), execute: (call, req) => client.execute(call, req), withExecutionFence: async (_call, dispatch) => dispatch() });

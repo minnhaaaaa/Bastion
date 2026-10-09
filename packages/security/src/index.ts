@@ -8,6 +8,8 @@ import { PolicyRequest, WorkflowDefinition, newId } from "@bastion/contracts";
 import type { ArtifactBroker, EventJournal, PolicyEngine, PolicyResult, ToolCall, ToolCallResult, ToolGateway } from "@bastion/contracts";
 export { SandboxClient, sandboxConfigFromEnv } from "./sandbox";
 export type { SandboxConfig } from "./sandbox";
+export { ToolApprovalService, toolApprovalDigest } from "./tool-approvals";
+export type { PendingToolApproval, ToolApprovalStore } from "./tool-approvals";
 
 /** Anchored glob: * cannot cross a path separator; ** can. */
 export function matches(pattern: string, resource: string): boolean {
@@ -56,6 +58,8 @@ export type GatewayOptions = {
   context(call: ToolCall): Promise<DispatchContext>;
   normalize(call: ToolCall): Promise<NormalizedCall>;
   execute(call: ToolCall, request: PolicyRequest): Promise<unknown>;
+  /** A durable pending store, supplied only after approval lifecycle/REST contracts are agreed. */
+  approvals?: { request(call: ToolCall, request: PolicyRequest, ruleId: string): Promise<string> };
   /** Quarantine/hold must share this lock with dispatch. */
   withExecutionFence<T>(call: ToolCall, dispatch: () => Promise<T>): Promise<T>;
 };
@@ -96,6 +100,10 @@ export class PolicyToolGateway implements ToolGateway {
           : ctx.policy.evaluate(req);
         const decision = evaluate(context, request);
         await this.options.journal.append(call.runId, [{ ...envelope, type: "tool.decided", payload: { toolRequestId, ...decision } }]);
+        if (decision.decision === "REQUIRE_APPROVAL" && this.options.approvals) {
+          const approvalId = await this.options.approvals.request(call, request, decision.ruleId);
+          return { status: "PENDING_APPROVAL", toolRequestId, approvalId };
+        }
         if (decision.decision !== "ALLOW") {
           await this.options.journal.append(call.runId, [{ ...envelope, type: "tool.executed", payload: { toolRequestId, outcome: "NOT_EXECUTED" } }]);
           return { status: "DENIED", toolRequestId, ruleId: decision.ruleId, reason: decision.reason };

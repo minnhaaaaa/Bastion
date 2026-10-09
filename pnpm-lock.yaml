@@ -203,7 +203,7 @@ importers:
         specifier: workspace:*
         version: link:../contracts
       '@mariozechner/pi-coding-agent':
-        specifier: ^0.73.1
+        specifier: 0.73.1
         version: 0.73.1(supports-color@7.2.0)(ws@8.21.3)(zod@3.25.76)
       '@sinclair/typebox':
         specifier: ^0.34.52

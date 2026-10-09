@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
-import { appendFile, readFile, writeFile, realpath } from 'node:fs/promises';
-import { resolve, relative, dirname, isAbsolute } from 'node:path';
+import { appendFile, readFile, writeFile, realpath, stat } from 'node:fs/promises';
+import { resolve, relative, dirname, basename, isAbsolute } from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { timingSafeEqual } from 'node:crypto';
@@ -8,7 +8,10 @@ import { timingSafeEqual } from 'node:crypto';
 const required = key => { const value = process.env[key]; if (!value?.trim()) throw new Error(`Missing ${key}`); return value; };
 const integer = key => { const value = Number(required(key)); if (!Number.isSafeInteger(value) || value <= 0) throw new Error(`Invalid ${key}`); return value; };
 const root = await realpath(required('SANDBOX_ROOT'));
-const audit = required('SANDBOX_AUDIT_PATH');
+const auditPath = resolve(required('SANDBOX_AUDIT_PATH'));
+const audit = resolve(await realpath(dirname(auditPath)), basename(auditPath));
+const auditRelative = relative(root, audit);
+if (auditRelative !== '..' && !auditRelative.startsWith('../') && !auditRelative.startsWith('..\\') && !isAbsolute(auditRelative)) throw new Error('Worker audit must be outside the agent workspace');
 const token = Buffer.from(required('SANDBOX_TOKEN'));
 const hosts = JSON.parse(required('SANDBOX_HTTP_ORIGINS'));
 const commands = JSON.parse(required('SANDBOX_EXEC_COMMANDS'));
@@ -31,6 +34,7 @@ export async function execute(body) {
   const record = () => appendFile(audit, JSON.stringify({ at: new Date().toISOString(), toolRequestId, executionId, operation, resource }) + '\n');
   if (operation === 'fs.read') {
     const path = await filePath(resource, false);
+    if ((await stat(path)).size > limit) throw new Error('Output exceeds limit');
     await record();
     const content = await readFile(path);
     if (content.length > limit) throw new Error('Output exceeds limit');
