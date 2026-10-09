@@ -1,4 +1,4 @@
-# SPLITBRAIN — Team Plan
+# Bastion — Team Plan
 
 Three people, one shared contract. Read this, then `packages/contracts/src/` — that folder **is** the spec.
 

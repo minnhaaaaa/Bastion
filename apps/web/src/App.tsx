@@ -15,7 +15,7 @@ export function App() {
 
   return (
     <main className="min-h-screen bg-neutral-950 p-8 text-neutral-100">
-      <h1 className="text-3xl font-bold">SPLITBRAIN</h1>
+      <h1 className="text-3xl font-bold">Bastion</h1>
       <dl className="mt-6 grid max-w-md grid-cols-2 gap-2 text-sm">
         <dt className="text-neutral-400">API</dt>
         <dd>{health.isPending ? "connecting…" : health.isError ? `unreachable (${health.error.message})` : "connected"}</dd>
