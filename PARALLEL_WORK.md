@@ -70,7 +70,7 @@ Rules (unchanged): **zero hardcoded data** (TEAM_PLAN.md → Rule #1), `packages
 - **Done when:** a human can approve one exact pending tool call, and it then executes exactly once.
 
 ### B4. Verification depth (P1)
-- [ ] Emit `claim.unverified`: check selected claims in outputs against the run's brokered sources, and flag the ones that aren't supported.
+- [x] Emit `claim.unverified`: check selected claims in outputs against the run's brokered sources, and flag the ones that aren't supported. *(Member 2's `verifySelectedClaims`, run by Member 3's `SOURCE_QUOTE` acceptance checks.)*
 - [~] Let workflows declare their own acceptance checks (schema + SOURCE_QUOTE done by Member 3; TOOL checks need the scheduler to run them inside the verifier task), such as an allowed `proc.exec` test command. The verifier runs these on top of the state-based checks in `apps/api/src/runtime/verification.ts`. This needs an additive `WorkflowDefinition` field, agreed with Member 3.
 
 ### B5. Remaining attack cards (P1)

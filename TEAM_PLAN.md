@@ -65,16 +65,20 @@ Member 1 builds against the **real API from day one**:
 
 ## Member 1 — UI (`apps/web`)
 
-- [ ] `features/stream/useRunStream(runId)`: socket `run.subscribe` → `run.snapshot` / `run.event`, fold with `applyEvent`; on `SeqGapError` resubscribe; reconnect with `lastSeq`.
-- [ ] `features/api/`: typed REST client from `contracts/commands.ts` (generates `commandId` via `newId("command")`).
-- [ ] `/` landing: hero, Try Arena / Launch Console; graph preview shows a **live** run if one exists, otherwise an empty state.
-- [ ] `/dashboard`: runs + workflows from the API; "new run" from a registered workflow.
-- [ ] `/runs/:runId`: React Flow from `toGraphView` (dagre/elk layout), colour by `taskState` + `securityState`, rerun attempts visible; live event timeline.
-- [ ] `/incidents/:id`: source inspector (preview), impact subgraph, plan diff (rerun vs preserved), Approve → `ApproveRecoveryCmd`.
+- [x] `features/stream/useRunStream(runId)`: socket `run.subscribe` → `run.snapshot` / `run.event`, fold with `applyEvent`; on `SeqGapError` resubscribe; reconnect with `lastSeq`. *(`lib/useRun.ts`; a reconnect or gap resubscribes for a fresh snapshot rather than replaying from `lastSeq`)*
+- [x] `features/api/`: typed REST client from `contracts/commands.ts` (generates `commandId` via `newId("command")`). *(`lib/api.ts`)*
+- [x] `/` landing: hero, Try Arena / Launch Console; graph preview shows a **live** run if one exists, otherwise an empty state.
+- [x] `/dashboard`: runs + workflows from the API; "new run" from a registered workflow.
+- [x] `/runs/:runId`: React Flow from `toGraphView` (dagre/elk layout), colour by `taskState` + `securityState`, rerun attempts visible; live event timeline. *(`components/RunGraph.tsx`)*
+- [x] `/incidents/:id`: source inspector (preview), impact subgraph, plan diff (rerun vs preserved), Approve → `ApproveRecoveryCmd`. *(built into the run console, not a separate route)*
 - [ ] `/policies`: policy rules of the selected workflow (read-only, from API).
-- [ ] `/arena/:roomId/host`: QR (`qrcode`) of the live join URL, presence, phase timer from server clock, live graph, reveal + score from `arena.reveal`.
-- [ ] `/arena/:roomId`: mobile player — role and cards from `player.private_state`; attack cards list the workflow's `attackPayloads` from the API; typed `ArenaActionCmd`, no free text.
+- [x] `/arena/:roomId/host`: QR (`qrcode`) of the live join URL, presence, phase timer from server clock, live graph, reveal + score from `arena.reveal`.
+- [x] `/arena/:roomId`: mobile player — role and cards from `player.private_state`; attack cards list the workflow's `attackPayloads` from the API; typed `ArenaActionCmd`, no free text.
 - [ ] P1: Motion transitions, baseline vs protected side-by-side. Playwright: join flow, approval flow.
+- [ ] Tool approvals: pending list (`GET /api/runs/:id/tool-approvals`), operator exact-target view (`GET /api/tool-approvals/:id`), approve/reject (`POST /api/tool-approvals/:id/resolve`).
+- [ ] Evaluation view: `GET /api/compare`, `GET /api/runs/:id/metrics`, export download (`GET /api/runs/:id/export`).
+- [ ] Arena host pause/resume/reset buttons (API: `POST /api/arena/rooms/:id/{pause,resume,reset}`).
+- [ ] Page through long event timelines (`/api/runs/:id/events?after=&limit=`; one request returns at most 500).
 
 ## Member 2 — Agent runtime, security, sandbox
 
@@ -100,7 +104,7 @@ Owns: `db`, `provenance`, `knowledge-graph`, `recovery`, `apps/api`. API referen
 - [x] `recovery`: `RecoveryManager` — auto-incident on DENY traced to untrusted upstream sources; synchronous quarantine → `Scheduler.hold` → invalidate → `containment.applied`; topological plan + preserved set + sha256 digest; single-use, expiring, digest-bound, human-only approvals; `approveAndRecover` → `Scheduler.rerun` → `RecoveryVerifier` → `recovery.completed` (fails closed).
 - [x] `apps/api`: all REST from ARCHITECTURE §8 + workflows/projects, bearer auth (operator/host/player), `commandId` idempotency, Socket.IO with gap-free sync + `lastSeq` replay, arena rooms (hashed join codes/tokens, 2–6 role allocation, server-clock phases, unicast private state, reveal gating).
 - [x] Runtime wired: `apps/api/src/runtime/` composes Member 2's `WorkflowScheduler`, `PolicyToolGateway` + `SandboxClient`, Pi adapter and `WorkflowRunner` with the journal/broker/recovery (shared `ExecutionFence`, journal-derived gateway context, sandbox-confined source loader, `SandboxTargetAudit` from the worker's access log, state-derived verification). Enabled with `AGENT_RUNTIME=enabled`. E2E test (real worker + target, scripted agent in place of the LLM) covers protected deny→quarantine→recovery and the baseline comparison.
-- [ ] Verify against real Postgres + Neo4j via `docker compose` (tests use in-process PGlite).
+- [x] Verify against real Postgres + Neo4j via `docker compose` (tests use in-process PGlite). *(done 2026-10-09: migrations + live Neo4j test against containers)*
 
 ---
 
