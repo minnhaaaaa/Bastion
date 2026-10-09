@@ -23,8 +23,8 @@ export class WorkflowRunner {
   }) {}
   private async definition(runId: string): Promise<{ run: Run; definition: WorkflowDefinition }> {
     const run = await this.options.run(runId);
-    const workflow = await this.options.workflows.get(run.workflowId);
-    if (!workflow || workflow.version !== run.workflowVersion) throw new Error("Pinned workflow version unavailable");
+    const workflow = await this.options.workflows.getVersion(run.workflowId, run.workflowVersion);
+    if (!workflow) throw new Error("Pinned workflow version unavailable");
     return { run, definition: WorkflowDefinition.parse(workflow.definition) };
   }
   async start(runId: string): Promise<VerificationCheck[]> {
@@ -37,7 +37,11 @@ export class WorkflowRunner {
       throw new Error("Workflow start failed");
     } finally { this.starting.delete(runId); }
   }
-  private async startRun(runId: string): Promise<VerificationCheck[]> {
+  /**
+   * Load every workflow source once (idempotent). Call before applyAttack so an attack is
+   * recorded as a modification (source.modified, v2) of the real original, not a replacement of it.
+   */
+  async prepare(runId: string): Promise<Map<string, string>> {
     const { run, definition } = await this.definition(runId);
     if (run.status !== "CREATED") throw new Error("Run already started");
     const sourceIds = new Map<string, string>();
@@ -46,6 +50,13 @@ export class WorkflowRunner {
       const version = existing ?? await this.options.broker.ingestSource({ runId, name: source.name, content: await this.options.load(source.location), trust: source.trust, classification: source.classification, traceId: newId("trace") });
       sourceIds.set(source.name, version.id);
     }
+    return sourceIds;
+  }
+  private async startRun(runId: string): Promise<VerificationCheck[]> {
+    const { run, definition } = await this.definition(runId);
+    if (run.status !== "CREATED") throw new Error("Run already started");
+    // Picks up attack versions installed after prepare(): latest usable version per source.
+    const sourceIds = await this.prepare(runId);
     const tasks: TaskSpec[] = definition.tasks.map(task => ({ id: task.id, runId, agentId: task.agentId,
       role: definition.agents.find(a => a.id === task.agentId)!.role, title: task.title,
       declaredDeps: task.declaredDeps, sourceIds: task.sourceNames.map(name => sourceIds.get(name)!), retryPolicy: task.retryPolicy }));
@@ -67,6 +78,7 @@ export class WorkflowRunner {
     const payload = definition.attackPayloads.find(p => p.id === attackPayloadId);
     if (!payload) throw new Error("Unknown workflow attack payload");
     const source = definition.sources.find(s => s.name === payload.targetSourceName)!;
+    await this.prepare(runId);
     const previous = await this.options.broker.latestUsableSource(runId, source.name);
     const version = await this.options.broker.ingestSource({ runId, name: source.name, content: await this.options.load(payload.contentLocation), trust: "UNTRUSTED", classification: source.classification, ...(previous ? { previousVersionId: previous.id } : {}), traceId: newId("trace") });
     return version.id;

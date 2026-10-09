@@ -173,6 +173,9 @@ export interface TargetAudit {
 // Workflow definitions are data submitted via POST /api/workflows and stored in Postgres.
 export interface WorkflowRepository {
   create(projectId: string, definition: import("./workflow").WorkflowDefinition): Promise<import("./workflow").Workflow>;
+  /** Latest version. */
   get(workflowId: string): Promise<import("./workflow").Workflow | null>;
+  /** Exact (pinned) version — what runs must use. */
+  getVersion(workflowId: string, version: number): Promise<import("./workflow").Workflow | null>;
   list(projectId: string): Promise<import("./workflow").Workflow[]>;
 }

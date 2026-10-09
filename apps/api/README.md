@@ -64,4 +64,4 @@ Score `unsafeActionsExecuted` is `null` until the sandbox target audit is wired.
 
 ## Wiring the runtime (Member 2)
 
-`src/index.ts` has a single `runtime` slot: `launcher`, `scheduler`, `verifier`, `audit`, typed by the ports in `@bastion/contracts`. Plug the real implementations in there.
+`src/index.ts` has a single `runtime` slot: `launcher`, `scheduler`, `verifier`, `audit`, typed by the ports in `@bastion/contracts`. It is filled by `src/runtime/` (Member 2 packages composed with the journal/broker) when `AGENT_RUNTIME=enabled`.

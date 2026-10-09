@@ -37,6 +37,12 @@ export interface RecoveryDeps {
   scheduler?: Scheduler;
   /** Member 2. Required to declare a recovery successful. */
   verifier?: RecoveryVerifier;
+  /**
+   * Execution fence shared with the tool gateway and scheduler (Member 2's ExecutionFence).
+   * Quarantine takes it for every affected execution before changing trust, so no dispatch can be
+   * between authorization and side effect while the source flips to QUARANTINED.
+   */
+  fence?: { run<T>(executionId: string, operation: () => Promise<T>): Promise<T> };
   /** Member 3 knowledge graph. Optional cross-check; never the sole basis for containment. */
   graph?: GraphProjector;
   approvalTtlMs: number;
@@ -161,12 +167,17 @@ export class RecoveryManager implements RecoveryService {
     const traceId = newId("trace");
     const src = s.sources[sourceVersionId]!;
 
-    // 1. Synchronously mark the source quarantined in the authoritative store. From this commit on,
-    //    the broker refuses it and the gateway's dispatch-time re-check denies dependents.
-    await this.d.journal.append(runId, [
-      { runId, traceId, type: "incident.quarantined", payload: { incidentId, sourceVersionId, actorId } },
-      { runId, traceId, type: "source.security_state_changed", payload: { sourceVersionId, from: src.securityState, to: "QUARANTINED", incidentId } },
-    ]);
+    // 1. Synchronously mark the source quarantined in the authoritative store, holding the fence of
+    //    every execution that consumed it. From this commit on, the broker refuses the source and
+    //    the gateway's dispatch-time re-check denies dependents.
+    const commit = () =>
+      this.d.journal.append(runId, [
+        { runId, traceId, type: "incident.quarantined", payload: { incidentId, sourceVersionId, actorId } },
+        { runId, traceId, type: "source.security_state_changed", payload: { sourceVersionId, from: src.securityState, to: "QUARANTINED", incidentId } },
+      ]);
+    const fenced = [...computeImpact(s, sourceVersionId).executionIds].sort();
+    const fence = this.d.fence;
+    await (fence ? fenced.reduceRight<() => Promise<unknown>>((inner, id) => () => fence.run(id, inner), commit)() : commit());
 
     // 2. Impact closure from Postgres (authoritative). Cross-check with the graph only if it is caught up.
     const after = await this.snap(runId);

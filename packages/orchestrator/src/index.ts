@@ -84,25 +84,30 @@ export class WorkflowScheduler implements Scheduler {
     if (!await this.options.broker.isUsable(replacementSourceVersionId)) throw new Error("Replacement source is unusable");
     const selected = taskIds.map(id => this.attempt(work, id));
     const order = new Map(taskIds.map((id, i) => [id, i]));
+    // An attempt that never executed (held before it started) is resumed, not retried.
+    const neverRan = (a: Attempt) => !a.done && !a.sessionId;
     for (const a of selected) {
       if (a.task.declaredDeps.some(dep => order.has(dep) && order.get(dep)! >= order.get(a.task.id)!)) throw new Error("Rerun order is not topological");
-      if (a.attempt >= a.task.retryPolicy.maxAttempts || !a.task.retryPolicy.idempotent) throw new Error("Retry policy forbids rerun");
+      if (!neverRan(a) && (a.attempt >= a.task.retryPolicy.maxAttempts || !a.task.retryPolicy.idempotent)) throw new Error("Retry policy forbids rerun");
     }
     await this.hold(runId, taskIds, "Recovery rerun");
     if (work.driving) await work.driving;
-    // Refresh affected logical sources through the broker; never replace unrelated inputs.
+    // Swap only inputs that are no longer usable (quarantined) for the approved replacement,
+    // which may be a different logical source (e.g. a trusted fallback). Unrelated inputs stay.
     const replacements = new Map<string, string[]>();
     let found = false;
     for (const a of selected) {
-      const declared = work.definition.tasks.find(t => t.id === a.task.id)!;
-      const sources = await Promise.all(declared.sourceNames.map(name => this.options.broker.latestUsableSource(runId, name)));
-      if (sources.some(s => !s)) throw new Error("Recovery source missing");
-      const ids = sources.map(s => s!.id);
+      const ids = await Promise.all(a.task.sourceIds.map(async id => (await this.options.broker.isUsable(id)) ? id : replacementSourceVersionId));
       found ||= ids.includes(replacementSourceVersionId);
       replacements.set(a.task.id, ids);
     }
-    if (!found) throw new Error("Replacement is not a current workflow source");
-    for (const a of selected) work.attempts.set(a.task.id, { task: { ...a.task, sourceIds: replacements.get(a.task.id)! }, executionId: newId("exec"), attempt: a.attempt + 1, state: "PENDING", held: false });
+    if (!found) throw new Error("Replacement does not replace any quarantined input of the rerun tasks");
+    for (const a of selected) {
+      const task = { ...a.task, sourceIds: replacements.get(a.task.id)! };
+      work.attempts.set(a.task.id, neverRan(a)
+        ? { task, executionId: a.executionId, attempt: a.attempt, state: a.state, held: false }
+        : { task, executionId: newId("exec"), attempt: a.attempt + 1, state: "PENDING", held: false });
+    }
     await this.drive(runId, work);
   }
   private get(runId: string): RunWork { const work = this.runs.get(runId); if (!work) throw new Error("Unknown scheduled run"); return work; }
@@ -122,7 +127,8 @@ export class WorkflowScheduler implements Scheduler {
       while (true) {
         for (const a of work.attempts.values()) {
           if (active.size >= this.options.parallelism) break;
-          if (a.state !== "PENDING" || a.held || a.done) continue;
+          // PAUSED-without-execution = held before it ever started; it may resume.
+          if ((a.state !== "PENDING" && a.state !== "PAUSED") || a.held || a.done) continue;
           const deps = a.task.declaredDeps.map(id => this.attempt(work, id));
           if (deps.some(d => d.state !== "SUCCEEDED" || d.held || !d.outputId)) continue;
           const inputIds = [...a.task.sourceIds, ...deps.map(d => d.outputId!)];

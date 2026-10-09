@@ -36,6 +36,11 @@ const Env = z.object({
   ROOM_TTL_SECONDS: seconds,
   ARENA_BRIEFING_SECONDS: seconds,
   ARENA_ATTACK_WINDOW_SECONDS: seconds,
+  /**
+   * Explicit choice: "enabled" requires all PI_* / SANDBOX_* / SCHEDULER_* settings and starts the
+   * agent runtime; "disabled" serves data only (runs/rooms return 503). No implicit fallback.
+   */
+  AGENT_RUNTIME: z.enum(["enabled", "disabled"]),
 });
 export type Env = z.infer<typeof Env>;
 

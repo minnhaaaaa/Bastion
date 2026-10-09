@@ -55,8 +55,16 @@ it("holds active tasks, prevents late publication, and preserves an independent 
   const successes = s.journal.events.filter(e => e.type === "task.state_changed" && e.payload.to === "SUCCEEDED");
   expect(successes).toHaveLength(3);
   expect(successes.filter(e => e.taskId === s.ids[2])).toEqual([independent]);
-  for (const event of successes.filter(e => e.taskId !== s.ids[2])) {
-    if (event.type === "task.state_changed") expect(event.payload.attempt).toBe(2);
+  const attemptOf = (taskId: string) => successes.find(e => e.taskId === taskId)!;
+  // ids[0] ran and was stopped → a fresh second attempt.
+  const rerun = attemptOf(s.ids[0]!);
+  if (rerun.type === "task.state_changed") expect(rerun.payload.attempt).toBe(2);
+  // ids[1] was held before it ever started → resumed as its first (never executed) attempt.
+  const resumed = attemptOf(s.ids[1]!);
+  const paused = s.journal.events.find(e => e.type === "task.state_changed" && e.taskId === s.ids[1] && e.payload.to === "PAUSED")!;
+  if (resumed.type === "task.state_changed" && paused.type === "task.state_changed") {
+    expect(resumed.payload.attempt).toBe(1);
+    expect(resumed.payload.executionId).toBe(paused.payload.executionId);
   }
   expect(s.broker.consumed.some(c => c.inputVersionId === replacement.id)).toBe(true);
 });

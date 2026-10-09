@@ -11,7 +11,7 @@ async function setup(mode: Run["mode"] = "PROTECTED") {
   const workflow: Workflow = { id: workflowId, projectId, version: 1, createdAt: new Date().toISOString(), definition: { name: crypto.randomUUID(), agents: [{ id: agentId, role: "VERIFIER", capabilities: [] }], tasks: [{ id: taskId, agentId, title: crypto.randomUUID(), declaredDeps: [], sourceNames: [sourceName], produces: crypto.randomUUID(), retryPolicy: { maxAttempts: 2, idempotent: true } }], sources: [{ name: sourceName, location, trust: "TRUSTED", classification: "INTERNAL" }], policyRules: [], attackPayloads: [{ id: payloadId, targetSourceName: sourceName, contentLocation: payloadLocation, label: crypto.randomUUID(), card: "POISON_DOCUMENT" }] } };
   const run: Run = { id: runId, workflowId, workflowVersion: 1, projectId, mode, status: "CREATED", startedAt: null, finishedAt: null };
   await journal.append(runId, [{ runId, traceId: newId("trace"), type: "run.created", payload: { projectId, workflowId, workflowVersion: 1, mode } }]);
-  const repository: WorkflowRepository = { get: async () => workflow, create: async () => workflow, list: async () => [workflow] };
+  const repository: WorkflowRepository = { get: async () => workflow, getVersion: async (_id, v) => (v === workflow.version ? workflow : null), create: async () => workflow, list: async () => [workflow] };
   const start = vi.fn<Scheduler["start"]>(async (_id, tasks) => {
     await journal.append(runId, [
       { runId, traceId: newId("trace"), type: "run.planned", payload: { tasks: tasks.map(t => ({ taskId: t.id, agentId: t.agentId, role: t.role, title: t.title, declaredDeps: t.declaredDeps, sourceIds: t.sourceIds, retryPolicy: t.retryPolicy })) } },
@@ -45,8 +45,10 @@ it("installs a registered attack as an untrusted version without broadcasting pa
   const source = await s.broker.latestUsableSource(s.run.id, s.sourceName);
   expect(source?.id).toBe(versionId);
   expect(source?.trust).toBe("UNTRUSTED");
+  expect(source?.version).toBe(2); // modification of the real original, not a replacement
+  expect(s.load).toHaveBeenCalledWith(s.location);
   await s.runner.start(s.run.id);
-  expect(s.load).toHaveBeenCalledTimes(1);
+  expect(s.load).toHaveBeenCalledTimes(2);
   expect(s.start.mock.calls[0]![1][0]!.sourceIds).toEqual([versionId]);
   expect(JSON.stringify(s.journal.events)).not.toContain("generated attack content");
   await expect(s.runner.applyAttack(s.run.id, crypto.randomUUID())).rejects.toThrow("Unknown");

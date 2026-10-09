@@ -32,15 +32,33 @@ importers:
       '@bastion/knowledge-graph':
         specifier: workspace:*
         version: link:../../packages/knowledge-graph
+      '@bastion/orchestrator':
+        specifier: workspace:*
+        version: link:../../packages/orchestrator
       '@bastion/provenance':
         specifier: workspace:*
         version: link:../../packages/provenance
       '@bastion/recovery':
         specifier: workspace:*
         version: link:../../packages/recovery
+      '@bastion/runtime-adapter':
+        specifier: workspace:*
+        version: link:../../packages/runtime-adapter
+      '@bastion/runtime-pi':
+        specifier: workspace:*
+        version: link:../../packages/runtime-pi
+      '@bastion/scenario-kit':
+        specifier: workspace:*
+        version: link:../../packages/scenario-kit
+      '@bastion/security':
+        specifier: workspace:*
+        version: link:../../packages/security
       '@fastify/cors':
         specifier: ^10.0.0
         version: 10.1.0
+      '@sinclair/typebox':
+        specifier: ^0.34.52
+        version: 0.34.52
       drizzle-orm:
         specifier: ^0.38.0
         version: 0.38.4(@electric-sql/pglite@0.5.8)(@types/react@19.3.0)(postgres@3.4.9)(react@19.3.0)

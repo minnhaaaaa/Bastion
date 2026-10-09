@@ -2,8 +2,8 @@ import { CommandStore, PgEventJournal, PgWorkflowRepository, ProjectRepository, 
 import { FsBlobStore, PgArtifactBroker } from "@bastion/provenance";
 import { RecoveryManager } from "@bastion/recovery";
 import { Neo4jProjector, loadSchemaStatements } from "@bastion/knowledge-graph";
-import type { RecoveryVerifier, RunLauncher, Scheduler, TargetAudit } from "@bastion/contracts";
 import { loadEnv } from "./env";
+import { buildAgentRuntime } from "./runtime";
 import { buildServer } from "./server";
 
 const env = loadEnv();
@@ -21,17 +21,18 @@ const graph = new Neo4jProjector(Neo4jProjector.connect(env.NEO4J_URI, env.NEO4J
 );
 await graph.start(await loadSchemaStatements());
 
-// ── Agent runtime (Member 2) ─────────────────────────────────────────────────
-// Wire the real implementations here once they exist. Until then they stay undefined and the
-// API reports runtimeConnected=false (runs/rooms return 503). Never substitute fakes in this file.
-const runtime: { launcher?: RunLauncher; scheduler?: Scheduler; verifier?: RecoveryVerifier; audit?: TargetAudit } = {};
+// ── Agent runtime (Member 2: Pi + gateway + sandbox + scheduler + runner) ─────
+// Enabled only by explicit configuration; never substituted with fakes.
+const runtime = env.AGENT_RUNTIME === "enabled" ? buildAgentRuntime({ env: process.env, journal, broker, workflows }) : undefined;
+if (!runtime) console.warn("AGENT_RUNTIME=disabled: runs and arena rounds cannot start");
 
 const recovery = new RecoveryManager({
   journal,
   locate: runs,
   workflows,
-  scheduler: runtime.scheduler,
-  verifier: runtime.verifier,
+  scheduler: runtime?.scheduler,
+  verifier: runtime?.verifier,
+  fence: runtime?.fence,
   graph,
   approvalTtlMs: env.APPROVAL_TTL_SECONDS * 1000,
   log: (m, e) => console.error(m, e),
@@ -48,8 +49,8 @@ const { app } = await buildServer(
     workflows,
     runs,
     commands: new CommandStore(pg.db),
-    launcher: runtime.launcher,
-    audit: runtime.audit,
+    launcher: runtime?.launcher,
+    audit: runtime?.audit,
     graph,
     operators: env.OPERATOR_TOKENS,
     config: {

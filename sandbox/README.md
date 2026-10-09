@@ -28,3 +28,11 @@ The container has an internal network with no external egress, a read-only root 
 The worker's append-only-in-normal-operation audit is independent of the journal. The integration test starts a real worker process, attempts a protected Pi gateway call, asserts zero target reads, and then performs a baseline read to prove the audit records actual access. This host-process test does not prove Docker network isolation; container egress and provider-driven execution must also be checked with the configured deployment. Preserve audit storage outside agent-writable directories and use a separate audit collector when granting powerful process tools.
 
 Recovery tests exercise holds, fresh execution IDs, incremented attempts, replacement sources, and an unchanged independent branch. Full Postgres/Neo4j containment and arena tests require Person 3's services.
+
+## Integration status (Member 3)
+
+Wired in `apps/api/src/runtime/` and enabled by `AGENT_RUNTIME=enabled`. Fixes made during integration:
+- `WorkflowRunner` loads the run's **pinned** workflow version via `WorkflowRepository.getVersion`. Previously it loaded the latest version and failed once a workflow was edited.
+- `WorkflowRunner.prepare()` loads sources before attacks are applied, so an attack is recorded as a `source.modified` v2 of the real original instead of replacing it.
+- `WorkflowScheduler.rerun` swaps only **quarantined** inputs for the approved replacement. The replacement can be a different logical source, such as a trusted `fallbackSourceName`. Tasks that were held before they ever ran resume their unexecuted attempt instead of consuming a retry.
+- Quarantine takes the shared `ExecutionFence` for every affected execution before it changes trust.

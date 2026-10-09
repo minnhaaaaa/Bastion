@@ -18,7 +18,13 @@
     "@bastion/provenance": "workspace:*",
     "@bastion/recovery": "workspace:*",
     "@bastion/knowledge-graph": "workspace:*",
-    "drizzle-orm": "^0.38.0"
+    "drizzle-orm": "^0.38.0",
+    "@bastion/orchestrator": "workspace:*",
+    "@bastion/scenario-kit": "workspace:*",
+    "@bastion/runtime-pi": "workspace:*",
+    "@bastion/runtime-adapter": "workspace:*",
+    "@bastion/security": "workspace:*",
+    "@sinclair/typebox": "^0.34.52"
   },
   "devDependencies": {
     "tsx": "^4.19.0",
