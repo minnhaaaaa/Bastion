@@ -1,3 +1,4 @@
+import { useConnections } from "./Connections";
 import { useState } from "react";
 import { AgentRole, SourceTrust, Classification, PolicyDecision, newId, type Workflow } from "@bastion/contracts";
 import { Plus, Trash2, Bot, GitBranch, FileText, ShieldCheck } from "lucide-react";
@@ -7,6 +8,8 @@ import { ErrorBox } from "../ui";
 import { DataSelect } from "../ui/data-select";
 
 export function WorkflowSetup({ projectId, token, onSaved }: { projectId: string; token: string; onSaved: (workflow: Workflow) => void }) {
+  const connections = useConnections(token);
+  const [models, setModels] = useState<Record<string, string>>({});
   const [rows, setRows] = useState<DraftRows>({ agents: [], tasks: [], sources: [], rules: [] });
   const [names, setNames] = useState<Record<string, string>>({});
   const [selections, setSelections] = useState<Record<string, string>>({});
@@ -26,7 +29,7 @@ export function WorkflowSetup({ projectId, token, onSaved }: { projectId: string
     setError(undefined); setBusy(true);
     try {
       const definition = workflowFromForm(form, rows);
-      const workflow = await api<Workflow>("/api/workflows", token, { commandId: newId("command"), projectId, definition });
+      const workflow = await api<Workflow>("/api/workflows", token, { commandId: newId("command"), projectId, definition, agentConnections: Object.fromEntries(rows.agents.filter(id => models[id]).map(id => [id, models[id]])) });
       onSaved(workflow);
     } catch (failure) { setError(failure); } finally { setBusy(false); }
   }}>
@@ -38,6 +41,7 @@ export function WorkflowSetup({ projectId, token, onSaved }: { projectId: string
       {rows.agents.map(id => <div className="desk-config-card" key={id}>
         <div className="desk-row"><code>{id}</code>{removeButton("agents", id)}</div>
         <label>Role<DataSelect aria-label="Role" name={`${id}.role`} value={selections[`${id}.role`] || ""} disabled={busy} required onValueChange={value => { selectValue(`${id}.role`, value); setNames(n => ({ ...n, [id]: value })); }}><option value="" disabled>Choose a role</option>{AgentRole.options.map(role => <option key={role} value={role}>{role}</option>)}</DataSelect></label>
+        {connections.data?.enabled && <label>Model<DataSelect aria-label="Agent model" value={models[id] || "project"} disabled={busy} onValueChange={value => setModels(previous => ({ ...previous, [id]: value === "project" ? "" : value }))}><option value="project">Use project model</option>{connections.data.connections.filter(connection => !connection.disabled).map(connection => <option key={connection.id} value={connection.id}>{connection.label} · {connection.model}</option>)}</DataSelect></label>}
         <label>Capabilities<textarea name={`${id}.capabilities`} rows={2} aria-describedby={`help-${id}`} /></label>
         <p id={`help-${id}`} className="desk-hint">One per line: domain.operation:resource-glob. Only grant access this agent needs.</p>
       </div>)}

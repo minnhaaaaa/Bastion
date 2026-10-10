@@ -1,3 +1,4 @@
+import { ProviderConnections } from "./provider-connections";
 /** Test-only harness: real server + PGlite + real services; runtime doubles are passed in by tests. */
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -11,7 +12,7 @@ import { newSecret } from "./auth";
 import { buildServer } from "./server";
 
 export async function createTestApp(
-  opts: { repositoryConnector?: import("./repository-access").RepositoryConnector; taskPlanner?: import("./task-planning").TaskPlanner; launcher?: RunLauncher; audit?: TargetAudit; briefingMs?: number; attackWindowMs?: number; reconnectGraceMs?: number; roomTtlMs?: number; joinRatePerMinute?: number; additionalOrigins?: string[] } = {},
+  opts: { taskAttachments?: import("./task-attachments").TaskAttachmentStore; providerConfig?: { controller: import("@bastion/runtime-pi").PiConfig; key: string }; repositoryConnector?: import("./repository-access").RepositoryConnector; taskPlanner?: import("./task-planning").TaskPlanner; launcher?: RunLauncher; audit?: TargetAudit; briefingMs?: number; attackWindowMs?: number; reconnectGraceMs?: number; roomTtlMs?: number; joinRatePerMinute?: number; additionalOrigins?: string[] } = {},
 ) {
   const { db, close } = await createTestDb();
   const dir = await mkdtemp(join(tmpdir(), "bastion-api-"));
@@ -21,6 +22,7 @@ export async function createTestApp(
   const broker = new PgArtifactBroker(journal, runs, new FsBlobStore(dir));
   const recovery = new RecoveryManager({ journal, locate: runs, workflows, approvalTtlMs: 60_000 });
   recovery.start();
+  const providerConnections = opts.providerConfig ? new ProviderConnections(db, opts.providerConfig.controller, opts.providerConfig.key) : undefined;
   const tokenA = newSecret();
   const tokenB = newSecret();
   const userA = newId("user");
@@ -28,6 +30,7 @@ export async function createTestApp(
   const { app, io, arena } = await buildServer(
     {
       db,
+      providerConnections,
       journal,
       broker,
       recovery,
@@ -37,6 +40,7 @@ export async function createTestApp(
       commands: new CommandStore(db),
       launcher: opts.launcher,
       taskPlanner: opts.taskPlanner,
+      taskAttachments: opts.taskAttachments,
       repositoryConnector: opts.repositoryConnector,
       audit: opts.audit,
       operators: new Map([
@@ -57,6 +61,7 @@ export async function createTestApp(
   );
   return {
     app,
+    providerConnections,
     io,
     arena,
     db,

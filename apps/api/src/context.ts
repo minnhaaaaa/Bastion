@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import {
   newId,
   type GraphProjector,
@@ -25,7 +25,10 @@ import { HttpError, forbidden, notFound } from "./errors";
 
 /** Everything the HTTP/socket layer needs. Built by the composition root (index.ts) or tests. */
 export interface AppDeps {
+  providerConnections?: import("./provider-connections").ProviderConnections;
+  chatgptAuth?: import("./chatgpt-auth").ChatGPTAuth;
   repositoryConnector?: import("./repository-access").RepositoryConnector;
+  taskAttachments?: import("./task-attachments").TaskAttachmentStore;
   taskPlanner?: import("./task-planning").TaskPlanner;
   db: Db;
   journal: PgEventJournal;
@@ -119,6 +122,15 @@ export class RunService {
 
   async start(workflow: Workflow, mode: "PROTECTED" | "BASELINE", attackPayloadIds: string[]): Promise<string> {
     const launcher = this.assertRuntime();
+    if (!this.d.providerConnections) {
+      const [assigned] = await this.d.db.select().from(schema.workflowModels).where(and(eq(schema.workflowModels.workflowId, workflow.id), eq(schema.workflowModels.version, workflow.version)));
+      if (assigned && Object.keys(assigned.bindings).length) throw new HttpError("UNAVAILABLE", "Restore provider connection storage before running this workflow");
+    }
+    if (this.d.providerConnections) {
+      const project = await this.d.projects.get(workflow.projectId);
+      if (!project) throw notFound("project");
+      await this.d.providerConnections.validateBindings(project.ownerId, workflow.definition, await this.d.providerConnections.bindings(workflow.id, workflow.version));
+    }
     const runId = newId("run");
     const traceId = newId("trace");
     await this.d.journal.append(runId, [

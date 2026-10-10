@@ -1,3 +1,4 @@
+import { ChatGPTAuth } from "./chatgpt-auth";
 import { CommandStore, PgEventJournal, PgWorkflowRepository, ProjectRepository, RunRepository, createDb } from "@bastion/db";
 import { FsBlobStore, PgArtifactBroker } from "@bastion/provenance";
 import { RecoveryManager } from "@bastion/recovery";
@@ -51,7 +52,10 @@ const { app } = await buildServer(
     runs,
     commands: new CommandStore(pg.db),
     launcher: runtime?.launcher,
+    providerConnections: runtime?.providerConnections,
+    chatgptAuth: runtime?.providerConnections ? ChatGPTAuth.fromEnv(process.env, runtime.providerConnections) : undefined,
     taskPlanner: runtime?.taskPlanner,
+    taskAttachments: runtime?.taskAttachments,
     repositoryConnector: runtime?.repositoryConnector,
     runtimeInfo: runtime?.info,
     toolApprovals: runtime?.toolApprovals,

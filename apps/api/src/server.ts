@@ -1,3 +1,4 @@
+import { providerRoutes } from "./routes/providers";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
@@ -42,6 +43,7 @@ export async function buildServer(deps: AppDeps, opts: { webOrigin: string; addi
   const arena = new ArenaService(deps, runs);
 
   coreRoutes(app, deps, { auth, access, idem, runs });
+  providerRoutes(app, deps, { auth, access });
   arenaRoutes(app, deps, { auth, access, idem, arena });
 
   const io = new Server<ClientToServerEvents, ServerToClientEvents, Record<string, never>, { actor: Actor }>(app.server, {

@@ -1,3 +1,4 @@
+import type { ModelConnection } from "./Connections";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Check, CircleHelp, ShieldAlert, GitBranch, Download } from "lucide-react";
@@ -14,6 +15,7 @@ export function RunEvidence({ snapshot, token, onTrace }: { snapshot: RunSnapsho
   const [exportError, setExportError] = useState<unknown>();
   const metrics = useQuery({ queryKey: ["run-metrics", snapshot.run.id, token, snapshot.lastSeq], queryFn: () => api<RunMetrics>(`/api/runs/${snapshot.run.id}/metrics`, token), refetchInterval: 5000 });
   const workflow = useQuery({ queryKey: ["run-policy", snapshot.run.workflowId, snapshot.run.workflowVersion, token], queryFn: () => api<Workflow>(`/api/workflows/${snapshot.run.workflowId}?version=${snapshot.run.workflowVersion}`, token) });
+  const models = useQuery({ queryKey: ["run-models", snapshot.run.workflowId, snapshot.run.workflowVersion, token], queryFn: () => api<{ bindings: Record<string, string>; connections: ModelConnection[] }>(`/api/workflows/${snapshot.run.workflowId}/models?version=${snapshot.run.workflowVersion}`, token) });
   const runs = useQuery({ queryKey: ["comparison-runs", snapshot.run.projectId, token], queryFn: () => api<RunSummary[]>(`/api/runs?projectId=${encodeURIComponent(snapshot.run.projectId)}`, token), refetchInterval: 5000 });
   const candidates = runs.data?.filter(run => run.workflowId === snapshot.run.workflowId && run.mode !== snapshot.run.mode) ?? [];
   const selectedOther = candidates.some(run => run.id === otherRun) ? otherRun : "";
@@ -43,6 +45,7 @@ export function RunEvidence({ snapshot, token, onTrace }: { snapshot: RunSnapsho
     <div className="desk-section-label">Recorded verification</div>
     {!checks?.length ? <p className="desk-hint">No completed verification recorded for this run.</p> : <ul className="desk-verification-list">{checks.map((check, index) => <li key={`${check.name}-${index}`} className={check.passed ? "" : "desk-check-failed"}>{check.passed ? <Check /> : <ShieldAlert />}<div><strong>{check.name.replaceAll("_", " ").replaceAll(".", " · ")}</strong><span>{check.passed ? "Passed" : "Not passed"}</span>{check.detail && <p>{check.detail}</p>}</div></li>)}</ul>}
     {unavailable && <p className="desk-hint"><CircleHelp /> Missing audit evidence cannot establish that no unsafe action occurred.</p>}
+    <details className="desk-result"><summary>Agent models for this run</summary><ErrorBox error={models.error} />{models.data && (Object.keys(models.data.bindings).length ? Object.entries(models.data.bindings).map(([agent, connectionId]) => { const connection = models.data.connections.find(item => item.id === connectionId); return <p key={agent}><code>{agent}</code><br />{connection ? `${connection.provider} · ${connection.model}` : "Connection unavailable"}</p>; }) : <p>No per-agent model assignment was recorded for this older workflow. Current controller settings cannot establish its historical model.</p>)}</details>
     <details className="desk-result"><summary>Policies for this run</summary>
       <ErrorBox error={workflow.error} />
       {workflow.isPending ? <p role="status">Loading policies…</p> : workflow.data && <>

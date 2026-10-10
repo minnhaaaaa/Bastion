@@ -347,7 +347,7 @@ describe("agent runtime wired to journal/broker/recovery/API", () => {
     const body = exp.json();
     expect(body.events).toHaveLength(body.metrics.events);
     expect(body.workflow.version).toBe(1);
-    expect(body.runtime).toMatchObject({ provider: t.runtimeEnv.PI_PROVIDER, model: t.runtimeEnv.PI_MODEL });
+    expect(body.runtime).toMatchObject({ controllerConfigurationAtExport: { provider: t.runtimeEnv.PI_PROVIDER, model: t.runtimeEnv.PI_MODEL }, historicalModelNotRecorded: true });
     expect(exp.body).not.toContain(t.runtimeEnv.PI_API_KEY);
     expect(exp.body).not.toContain(t.runtimeEnv.SANDBOX_TOKEN);
   }, 30_000);

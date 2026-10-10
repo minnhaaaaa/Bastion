@@ -38,6 +38,9 @@ export function errorHandler(err: FastifyError | Error, req: FastifyRequest, rep
       status = 503;
     } else code = err.code as Code;
     message = err.message;
+  } else if ((err as FastifyError).statusCode === 413) {
+    code = "VALIDATION";
+    message = "The request exceeds the controller’s upload limit. Attach smaller text documents.";
   } else if ((err as FastifyError).statusCode === 429) {
     code = "RATE_LIMITED";
     message = err.message;

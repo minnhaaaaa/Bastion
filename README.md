@@ -181,6 +181,10 @@ pnpm test                     # contracts + api tests
 pnpm dev                      # web + api
 ```
 
+### Console setup and security demonstrations
+
+Connect providers and select project models using [the Connections guide](docs/CONNECTIONS.md). Follow [the security walkthrough](docs/SECURITY_WALKTHROUGH.md) to inspect actual tool decisions, provenance, verification, and recovery.
+
 ## Layout
 
 ```

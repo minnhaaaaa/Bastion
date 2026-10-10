@@ -1,4 +1,4 @@
-import { inArray } from "drizzle-orm";
+import { and, eq, isNull, inArray } from "drizzle-orm";
 import { latestExecution, newId, type NewRunEvent, type Scheduler } from "@bastion/contracts";
 import { schema, type Db, type PgEventJournal } from "@bastion/db";
 import { PgToolApprovalStore } from "./toolApprovals";
@@ -17,7 +17,8 @@ export async function reconcileOnBoot(d: { db: Db; journal: PgEventJournal; sche
   const rows = await d.db
     .select({ id: schema.runs.id })
     .from(schema.runs)
-    .where(inArray(schema.runs.status, ["CREATED", "RUNNING", "RECOVERING", "CONTAINED", "COMPLETED", "FAILED", "RECOVERY_FAILED"]));
+    .innerJoin(schema.projects, eq(schema.projects.id, schema.runs.projectId))
+    .where(and(isNull(schema.runs.deletedAt), isNull(schema.projects.deletedAt), inArray(schema.runs.status, ["CREATED", "RUNNING", "RECOVERING", "CONTAINED", "COMPLETED", "FAILED", "RECOVERY_FAILED"])));
 
   for (const { id: runId } of rows) {
     const s = await d.journal.snapshot(runId);

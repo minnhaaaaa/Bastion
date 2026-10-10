@@ -12,6 +12,8 @@ import type { AgentRunRequest, AgentRuntimeAdapter, RuntimeEvent, ToolCall, Tool
 import { existsSync } from "node:fs";
 import { isAbsolute } from "node:path";
 import { privatePiTraceWriter, type PiTraceRecord } from "./trace";
+export { customModelFromEnv };
+export type { CustomModel };
 export { privatePiTraceWriter } from "./trace";
 export type { PiTraceRecord } from "./trace";
 
@@ -93,6 +95,13 @@ export function piProviderModels(provider: string) {
   return ModelRegistry.create(AuthStorage.inMemory(), "").getAll()
     .filter(model => model.provider === provider)
     .map(({ id, baseUrl }) => ({ id, baseUrl }));
+}
+
+/** Installed adapter metadata, not claims about account access or available credits. */
+export function piModelCatalog() {
+  return ModelRegistry.create(AuthStorage.inMemory(), "").getAll()
+    .filter(model => model.provider !== "openai-codex" && ["openai-completions", "openai-responses", "anthropic-messages"].includes(model.api))
+    .map(({ provider, id, name, baseUrl, api }) => ({ provider, id, name, baseUrl, api }));
 }
 
 export async function loginCodex(authFile: string, callbacks: Parameters<AuthStorage["login"]>[1]) {

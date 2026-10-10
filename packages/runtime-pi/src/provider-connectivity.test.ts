@@ -12,7 +12,7 @@ it.skipIf(process.env.BASTION_PROVIDER_HTTP_DIAGNOSTIC !== "enabled")("custom pr
     body: JSON.stringify({ model: config.model, messages: [{ role: "user", content: `Reply with this identifier only: ${crypto.randomUUID()}` }], max_tokens: 256, stream: false }),
     signal: AbortSignal.timeout(20000),
   });
-  const body = await response.json();
+  const body = await response.json() as { choices?: { message?: { content?: string } }[] };
   console.log({ httpStatus: response.status, hasCompletion: !!body.choices?.[0]?.message?.content });
   expect(response.ok).toBe(true);
   expect(body.choices?.[0]?.message?.content).toBeTruthy();

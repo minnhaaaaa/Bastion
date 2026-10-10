@@ -1,6 +1,6 @@
 /** Metadata for an explicitly configured OpenAI-compatible endpoint, never a fallback model. */
 export type CustomModel = {
-  api: "openai-completions";
+  api: "openai-completions" | "openai-responses";
   reasoning: boolean;
   input: ("text" | "image")[];
   contextWindow: number;
@@ -15,7 +15,7 @@ export function customModelFromEnv(raw: string): CustomModel {
   const model = value as Record<string, unknown>;
   const keys = ["api", "reasoning", "input", "contextWindow", "maxTokens", "cost"];
   if (Object.keys(model).length !== keys.length || Object.keys(model).some(key => !keys.includes(key))) throw invalid();
-  if (model.api !== "openai-completions" || typeof model.reasoning !== "boolean" || !Array.isArray(model.input) || !model.input.length || model.input.some(item => item !== "text" && item !== "image")) throw invalid();
+  if (!["openai-completions", "openai-responses"].includes(model.api as string) || typeof model.reasoning !== "boolean" || !Array.isArray(model.input) || !model.input.length || model.input.some(item => item !== "text" && item !== "image")) throw invalid();
   if (![model.contextWindow, model.maxTokens].every(value => typeof value === "number" && Number.isSafeInteger(value) && value > 0)) throw invalid();
   const cost = model.cost;
   if (!cost || typeof cost !== "object" || Array.isArray(cost)) throw invalid();

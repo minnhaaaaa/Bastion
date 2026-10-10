@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
   WorkflowDefinition,
   newId,
@@ -21,12 +21,12 @@ export class ProjectRepository {
   }
 
   async get(id: string): Promise<Project | null> {
-    const [r] = await this.db.select().from(t.projects).where(eq(t.projects.id, id));
+    const [r] = await this.db.select().from(t.projects).where(and(eq(t.projects.id, id), isNull(t.projects.deletedAt)));
     return r ? { id: r.id, ownerId: r.ownerId, name: r.name, policySetId: r.policySetId } : null;
   }
 
   async listByOwner(ownerId: string): Promise<Project[]> {
-    const rows = await this.db.select().from(t.projects).where(eq(t.projects.ownerId, ownerId)).orderBy(desc(t.projects.createdAt));
+    const rows = await this.db.select().from(t.projects).where(and(eq(t.projects.ownerId, ownerId), isNull(t.projects.deletedAt))).orderBy(desc(t.projects.createdAt));
     return rows.map((r) => ({ id: r.id, ownerId: r.ownerId, name: r.name, policySetId: r.policySetId }));
   }
 }
@@ -114,13 +114,14 @@ export class RunRepository {
         openIncidents: sql<number>`(select count(*)::int from ${t.securityIncidents} i where i.run_id = ${t.runs.id} and i.state not in ('RESOLVED'))`,
       })
       .from(t.runs)
-      .where(inArray(t.runs.projectId, projectIds))
+      .innerJoin(t.projects, eq(t.projects.id, t.runs.projectId))
+      .where(and(inArray(t.runs.projectId, projectIds), isNull(t.runs.deletedAt), isNull(t.projects.deletedAt)))
       .orderBy(desc(t.runs.startedAt));
     return rows.map((r) => ({ ...r, startedAt: r.startedAt ? toIso(r.startedAt) : null, openIncidents: Number(r.openIncidents) }));
   }
 
   async projectOf(runId: string): Promise<string | null> {
-    const [r] = await this.db.select({ projectId: t.runs.projectId }).from(t.runs).where(eq(t.runs.id, runId));
+    const [r] = await this.db.select({ projectId: t.runs.projectId }).from(t.runs).innerJoin(t.projects, eq(t.projects.id, t.runs.projectId)).where(and(eq(t.runs.id, runId), isNull(t.runs.deletedAt), isNull(t.projects.deletedAt)));
     return r?.projectId ?? null;
   }
 

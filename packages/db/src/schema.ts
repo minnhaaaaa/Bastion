@@ -46,6 +46,7 @@ export const projects = pgTable("projects", {
   ownerId: text("owner_id").notNull(),
   name: text("name").notNull(),
   policySetId: text("policy_set_id"),
+  deletedAt: ts("deleted_at"),
   createdAt: ts("created_at").notNull().defaultNow(),
 });
 
@@ -85,7 +86,25 @@ export const runs = pgTable("runs", {
   status: runStatus("status").notNull().default("CREATED"),
   startedAt: ts("started_at"),
   finishedAt: ts("finished_at"),
+  deletedAt: ts("deleted_at"),
 });
+
+/** Controller-owned credentials. Only authenticated owners see public connection metadata. */
+export const providerConnections = pgTable("provider_connections", {
+  id: text("id").primaryKey(), ownerId: text("owner_id").notNull(), label: text("label").notNull(),
+  provider: text("provider").notNull(), model: text("model").notNull(), baseUrl: text("base_url").notNull(),
+  authMode: text("auth_mode").notNull(), credential: text("credential").notNull(),
+  metadata: jsonb("metadata").$type<unknown>(), disabled: boolean("disabled").notNull().default(false),
+  createdAt: ts("created_at").notNull().defaultNow(),
+});
+export const projectModels = pgTable("project_models", {
+  projectId: text("project_id").primaryKey().references(() => projects.id),
+  connectionId: text("connection_id").notNull().references(() => providerConnections.id),
+});
+export const workflowModels = pgTable("workflow_models", {
+  workflowId: text("workflow_id").notNull(), version: integer("version").notNull(),
+  bindings: jsonb("bindings").$type<Record<string, string>>().notNull(),
+}, t => [primaryKey({ columns: [t.workflowId, t.version] }), foreignKey({ columns: [t.workflowId, t.version], foreignColumns: [workflows.id, workflows.version] })]);
 
 /** Task IDs are logical and unique within a run → composite key. */
 export const taskSpecs = pgTable(

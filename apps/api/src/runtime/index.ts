@@ -1,3 +1,7 @@
+import { taskAttachmentStore } from "../task-attachments";
+import { ProviderConnections } from "../provider-connections";
+import { and, eq } from "drizzle-orm";
+import { schema } from "@bastion/db";
 import { repositoryConnector } from "../repository-access";
 import { createTaskPlanner } from "../task-planning";
 import { join, relative } from "node:path";
@@ -51,6 +55,7 @@ export function buildAgentRuntime(input: {
   const { env, journal, broker, workflows } = input;
   const pi = piConfigFromEnv(env);
   if (!input.createAgent) piModelRegistry(pi);
+  const providerConnections = env.PROVIDER_CREDENTIAL_KEY ? new ProviderConnections(input.db, pi, env.PROVIDER_CREDENTIAL_KEY) : undefined;
   const sandbox = sandboxConfigFromEnv(env);
   const parallelism = schedulerParallelismFromEnv(env);
   const httpOrigins = JSON.parse(required(env, "SANDBOX_HTTP_ORIGINS")) as string[];
@@ -160,7 +165,14 @@ export function buildAgentRuntime(input: {
           securityState: source?.securityState ?? artifact!.trustState };
       });
       const enriched = { ...context, inputs };
-      return input.createAgent ? input.createAgent(enriched, gateway, tools) : piRuntimeForExecution({ context: enriched, cwd: sandbox.hostRoot, config: pi, tools, gateway });
+      const workflow = await workflows.getVersion(evidence.run.workflowId, evidence.run.workflowVersion);
+      if (!workflow) throw new Error("Pinned workflow version unavailable");
+      if (!providerConnections) {
+        const [assigned] = await input.db.select().from(schema.workflowModels).where(and(eq(schema.workflowModels.workflowId, workflow.id), eq(schema.workflowModels.version, workflow.version)));
+        if (assigned && Object.keys(assigned.bindings).length) throw new Error("Provider connection storage is required for this workflow");
+      }
+      const config = providerConnections ? await providerConnections.forExecution(workflow, context.task.agentId) : pi;
+      return input.createAgent ? input.createAgent(enriched, gateway, tools) : piRuntimeForExecution({ context: enriched, cwd: sandbox.hostRoot, config, tools, gateway });
     },
   });
 
@@ -190,5 +202,5 @@ export function buildAgentRuntime(input: {
     verify: async (runId) => verifyRun(await snapshot(runId), audit, { definition: await definitionFor(runId), journal, content: (r, v) => broker.content(r, v) }),
   };
 
-  return { repositoryConnector: env.REPOSITORY_GIT_EXECUTABLE ? repositoryConnector({ hostRoot: sandbox.hostRoot, workerRoot: sandbox.workerRoot, gitExecutable: env.REPOSITORY_GIT_EXECUTABLE, timeoutMs: sandbox.timeoutMs, maxBytes, toolOperations: sandbox.toolOperations }) : undefined, taskPlanner: createTaskPlanner(pi, sandbox.hostRoot), launcher, scheduler, verifier, audit, fence, gateway, toolApprovals, info: { provider: pi.provider, model: pi.model, timeoutMs: pi.timeoutMs } };
+  return { taskAttachments: taskAttachmentStore({ hostRoot: sandbox.hostRoot, workerRoot: sandbox.workerRoot, maxBytes }), providerConnections, repositoryConnector: env.REPOSITORY_GIT_EXECUTABLE ? repositoryConnector({ hostRoot: sandbox.hostRoot, workerRoot: sandbox.workerRoot, gitExecutable: env.REPOSITORY_GIT_EXECUTABLE, timeoutMs: sandbox.timeoutMs, maxBytes, toolOperations: sandbox.toolOperations }) : undefined, taskPlanner: createTaskPlanner(pi, sandbox.hostRoot), launcher, scheduler, verifier, audit, fence, gateway, toolApprovals, info: { provider: pi.provider, model: pi.model, timeoutMs: pi.timeoutMs } };
 }

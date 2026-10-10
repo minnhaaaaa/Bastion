@@ -1,4 +1,6 @@
-import { eq } from "drizzle-orm";
+import { redactText } from "@bastion/provenance";
+import { TaskDocument, attachTaskSources } from "../task-attachments";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { schema } from "@bastion/db";
 import { RepositorySelection, RepositoryAccess } from "../repository-access";
 import { z } from "zod";
@@ -22,6 +24,7 @@ import type { Access, AppDeps, RunService } from "../context";
 import { HttpError, notFound } from "../errors";
 import type { Idempotency } from "../idempotency";
 
+const ModelSelection = z.object({ connectionId: z.string().min(1).optional(), agentConnections: z.record(z.string().min(1)).optional() });
 const IdParam = z.object({ id: z.string().min(1) });
 
 export function coreRoutes(
@@ -47,9 +50,38 @@ export function coreRoutes(
     return d.projects.listByOwner(actor.userId);
   });
 
+  // Workspace deletion preserves the immutable security journal for audit.
+  for (const kind of ["projects", "runs"] as const) {
+    app.post(`/api/${kind}/:id/delete`, async (req, reply) => {
+      const actor = await op(req);
+      const { id } = IdParam.parse(req.params);
+      const cmd = z.object({ commandId: z.string().min(1) }).strict().parse(req.body);
+      return x.idem.run(reply, { commandId: cmd.commandId, actorId: actor.userId, route: `${kind}.delete:${id}` }, async () => {
+        const projectId = kind === "projects" ? id : await d.runs.projectOf(id);
+        if (!projectId) throw notFound("run");
+        await d.db.transaction(async tx => {
+          const [project] = await tx.select().from(schema.projects).where(and(eq(schema.projects.id, projectId), eq(schema.projects.ownerId, actor.userId), isNull(schema.projects.deletedAt))).for("update");
+          if (!project) throw notFound("project");
+          const target = kind === "projects" ? eq(schema.runs.projectId, id) : eq(schema.runs.id, id);
+          const rows = await tx.select().from(schema.runs).where(and(target, isNull(schema.runs.deletedAt))).for("update");
+          if (kind === "runs" && !rows.length) throw notFound("run");
+          if (rows.some(run => !["COMPLETED", "RECOVERED", "FAILED", "RECOVERY_FAILED"].includes(run.status))) throw new HttpError("CONFLICT", "Wait for active runs to finish before deleting.");
+          const [room] = await tx.select({ id: schema.arenaRooms.id }).from(schema.arenaRooms)
+            .innerJoin(schema.workflows, eq(schema.workflows.id, schema.arenaRooms.workflowId))
+            .where(and(kind === "projects" ? eq(schema.workflows.projectId, id) : eq(schema.arenaRooms.runId, id), inArray(schema.arenaRooms.status, ["OPEN", "IN_PROGRESS"]))).limit(1);
+          if (room) throw new HttpError("CONFLICT", "Finish the active arena session before deleting.");
+          const deletedAt = new Date().toISOString();
+          await tx.update(schema.runs).set({ deletedAt }).where(and(target, isNull(schema.runs.deletedAt)));
+          if (kind === "projects") await tx.update(schema.projects).set({ deletedAt }).where(eq(schema.projects.id, id));
+        });
+        return { status: 200, body: { deleted: true } };
+      });
+    });
+  }
+
   app.get("/api/connection", async req => {
     await op(req);
-    return { runtime: d.runtimeInfo ?? null, repositoryAvailable: !!d.repositoryConnector };
+    return { runtime: d.runtimeInfo ?? null, repositoryAvailable: !!d.repositoryConnector, attachments: d.taskAttachments ? { maxBytes: d.taskAttachments.maxBytes } : null };
   });
 
   app.get("/api/projects/:id/repository", async req => {
@@ -79,11 +111,16 @@ export function coreRoutes(
 
   // Preparation has no tools and persists no workflow. The client submits the validated result
   // through POST /api/workflows before starting its protected run.
-  app.post("/api/projects/:id/task-plan", async (req, reply) => {
+  app.post("/api/projects/:id/task-plan", { ...(d.taskAttachments ? { bodyLimit: d.taskAttachments.maxBytes * 6 } : {}) }, async (req, reply) => {
     const actor = await op(req);
     const { id } = IdParam.parse(req.params);
-    const cmd = z.object({ commandId: z.string().min(1), instruction: z.string().trim().min(1), baseWorkflowId: z.string().min(1).optional(), baseWorkflowVersion: z.number().int().positive().optional(), contextRunId: z.string().min(1).optional() }).strict().parse(req.body);
+    const cmd = z.object({ commandId: z.string().min(1), instruction: z.string().trim().min(1), baseWorkflowId: z.string().min(1).optional(), baseWorkflowVersion: z.number().int().positive().optional(), contextRunId: z.string().min(1).optional(), connectionId: z.string().min(1).optional(), documents: z.array(TaskDocument).optional() }).strict().parse(req.body);
     await x.access.ownProject(actor, id);
+    if (cmd.documents?.length) {
+      if (!d.taskAttachments) throw new HttpError("UNAVAILABLE", "Document attachments are not enabled on the controller");
+      if (cmd.baseWorkflowId || cmd.contextRunId) throw new HttpError("VALIDATION", "Attach documents to a new task without a saved workflow or follow-up context");
+      d.taskAttachments.validate(cmd.documents);
+    }
     if (!!cmd.baseWorkflowId !== !!cmd.baseWorkflowVersion) throw new HttpError("VALIDATION", "Select an exact workflow version");
     let base = cmd.baseWorkflowId ? await x.access.ownWorkflow(actor, cmd.baseWorkflowId, cmd.baseWorkflowVersion) : undefined;
     if (base && base.projectId !== id) throw new HttpError("FORBIDDEN", "Workflow belongs to another project");
@@ -100,9 +137,18 @@ export function coreRoutes(
     }
     const [connection] = await d.db.select().from(schema.projectConnections).where(eq(schema.projectConnections.projectId, id));
     const repository = !base && connection?.repository ? RepositoryAccess.parse(connection.repository) : undefined;
+    const connectionId = cmd.connectionId ?? await d.providerConnections?.projectDefault(id);
+    if (d.providerConnections && !connectionId) throw new HttpError("VALIDATION", "Choose a project model in Connections first");
+    const selectedConfig = connectionId ? await d.providerConnections?.config(actor.userId, connectionId) : undefined;
     const planner = d.taskPlanner;
     if (!planner) throw new HttpError("UNAVAILABLE", "Task planning is not connected on the controller");
-    return x.idem.run(reply, { commandId: cmd.commandId, actorId: actor.userId, route: `projects.task-plan:${id}` }, async () => ({ status: 200, body: { definition: await planner(cmd.instruction, base, repository, followUp) } }));
+    return x.idem.run(reply, { commandId: cmd.commandId, actorId: actor.userId, route: `projects.task-plan:${id}` }, async () => {
+      const definition = await planner(cmd.instruction, base, repository, followUp, selectedConfig, cmd.documents?.map(document => `Attachment: ${document.name}`));
+      if (!cmd.documents?.length) return { status: 200, body: { definition } };
+      const stored = await d.taskAttachments!.persist(cmd.documents);
+      try { return { status: 200, body: { definition: attachTaskSources(definition, stored.sources) } }; }
+      catch (error) { await stored.discard(); throw error; }
+    });
   });
 
   // ── Workflows (definitions are data) ─────────────────────────────────────
@@ -112,7 +158,7 @@ export function coreRoutes(
     await x.access.ownProject(actor, cmd.projectId);
     return x.idem.run(reply, { commandId: cmd.commandId, actorId: actor.userId, route: "workflows.create" }, async () => ({
       status: 201,
-      body: await d.workflows.create(cmd.projectId, cmd.definition),
+      body: d.providerConnections ? await d.providerConnections.saveWorkflow(actor.userId, cmd.projectId, cmd.definition, ModelSelection.parse(req.body)) : await d.workflows.create(cmd.projectId, cmd.definition),
     }));
   });
 
@@ -120,10 +166,10 @@ export function coreRoutes(
     const actor = await op(req);
     const { id } = IdParam.parse(req.params);
     const cmd = CreateWorkflowVersionCmd.parse(req.body);
-    await x.access.ownWorkflow(actor, id);
+    const previous = await x.access.ownWorkflow(actor, id);
     return x.idem.run(reply, { commandId: cmd.commandId, actorId: actor.userId, route: `workflows.version:${id}` }, async () => ({
       status: 201,
-      body: await d.workflows.createVersion(id, cmd.definition),
+      body: d.providerConnections ? await d.providerConnections.saveWorkflow(actor.userId, previous.projectId, cmd.definition, ModelSelection.parse(req.body), previous) : await d.workflows.createVersion(id, cmd.definition),
     }));
   });
 
@@ -166,6 +212,17 @@ export function coreRoutes(
   app.get("/api/runs/:id", async (req) => {
     const { id } = IdParam.parse(req.params);
     return x.access.readRun(await any(req), id);
+  });
+
+  // Full responses remain operator-only; sockets and event exports retain redacted previews.
+  app.get("/api/runs/:id/artifacts/:artifactId/content", async (req, reply) => {
+    const actor = await op(req);
+    const { id, artifactId } = z.object({ id: z.string().min(1), artifactId: z.string().min(1) }).parse(req.params);
+    const snapshot = await x.access.operatorRun(actor, id);
+    const artifact = snapshot.artifacts[artifactId];
+    if (!artifact) throw new HttpError("NOT_FOUND", "Artifact not found in this run");
+    if (artifact.trustState !== "CLEAR" || snapshot.executions[artifact.producerExecutionId]?.securityState !== "CLEAR") throw new HttpError("CONFLICT", "This output is no longer usable. Review the incident in Security.");
+    return reply.header("Cache-Control", "no-store").send({ content: redactText(await d.broker.content(id, artifactId)) });
   });
 
   app.get("/api/runs/:id/events", async (req) => {
@@ -214,12 +271,14 @@ export function coreRoutes(
     const s = await x.access.operatorRun(actor, id);
     const events = await d.journal.read(id);
     const workflow = await d.workflows.getVersion(s.run.workflowId, s.run.workflowVersion);
+    const bindings = await d.providerConnections?.bindings(s.run.workflowId, s.run.workflowVersion) ?? {};
+    const connections = (await d.providerConnections?.list(actor.userId) ?? []).filter(connection => Object.values(bindings).includes(connection.id));
     reply.header("content-disposition", `attachment; filename="${id}.json"`);
     return {
       exportedAt: new Date().toISOString(),
       run: s.run,
       workflow,
-      runtime: d.runtimeInfo ?? null,
+      runtime: Object.keys(bindings).length ? { bindings, connections } : { controllerConfigurationAtExport: d.runtimeInfo ?? null, historicalModelNotRecorded: true },
       metrics: await computeMetrics(s, events, d.audit),
       events,
     };

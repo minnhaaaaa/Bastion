@@ -6,13 +6,15 @@ const URL_CREDENTIALS = /\/\/[^/\s:@]+:[^/\s@]+@/g;
  * Safe-to-broadcast preview: secret-looking values removed, whitespace collapsed, truncated.
  * Full content stays behind its blobRef and never enters events (ARCHITECTURE §7).
  */
-export function redactPreview(content: string | Uint8Array, max = 200): string {
+export function redactText(content: string | Uint8Array): string {
   const text = typeof content === "string" ? content : new TextDecoder().decode(content);
-  const cleaned = text
+  return text
     .replace(URL_CREDENTIALS, "//[redacted]@")
     .replace(SECRET_KV, (_m, k: string) => `${k}=[redacted]`)
-    .replace(LONG_OPAQUE, "[redacted]")
-    .replace(/\s+/g, " ")
-    .trim();
+    .replace(LONG_OPAQUE, "[redacted]");
+}
+
+export function redactPreview(content: string | Uint8Array, max = 200): string {
+  const cleaned = redactText(content).replace(/\s+/g, " ").trim();
   return cleaned.length > max ? `${cleaned.slice(0, max - 1)}…` : cleaned;
 }

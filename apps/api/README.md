@@ -148,3 +148,15 @@ Task planning also accepts `contextRunId` for a completed/recovered run in the s
 ### Executable acceptance checks
 
 Workflow-declared TOOL checks now execute through the same policy/approval gateway while their VERIFIER execution is active, after the model finishes and before output publication. Sandbox command failure, denied access, missing evidence or a controller failure prevents task success. Each controller-issued receipt is bound to the complete check and execution; final/recovery verification checks it against the recorded exact-argument hash and successful tool request. Earlier attempts and ordinary model tool calls cannot substitute for that receipt. No new shared contract fields are needed. This verifies execution of the declared check, not universal factual accuracy.
+
+### Task document attachments
+
+The composer’s **Add files** control attaches UTF-8 text documents to a new, normally typed task. `POST /api/projects/:id/task-plan` accepts optional `documents: [{ name, content }]`. The authenticated operator must own the project. The attachment budget comes from required `SANDBOX_MAX_BYTES` and is exposed by `GET /api/connection` as `attachments.maxBytes` when the runtime is enabled. Duplicate filenames, binary content, PDF/Office files, and oversized uploads are rejected.
+
+Only document names reach the planner; their contents are stored in unique files under the configured sandbox workspace. The validated plan references those files as UNTRUSTED/INTERNAL sources for each task, with no additional tool capabilities or policy grants. The normal workflow submission persists that definition in Postgres before a protected run starts; the broker records the actual source contents and provenance. Attachment files must remain available with the sandbox workspace for subsequent runs. They are uploaded when the task is sent, not when selected.
+
+Attachments currently apply to fresh plans, including plans with repository access. Saved workflow adaptations and follow-ups reject added documents so their existing security structure remains pinned. Removing a file chip before sending excludes it from the request.
+
+Dashboard response content is available to the owning operator at `GET /api/runs/:id/artifacts/:artifactId/content`. It preserves Markdown and whitespace, redacts sensitive patterns, disables caching, and rejects unusable artifacts or producer executions. Events continue to carry redacted previews.
+
+`POST /api/projects/:id/delete` and `POST /api/runs/:id/delete` accept `{ "commandId": "<unique command ID>" }`. These owner-only, idempotent actions remove items from workspace listings and access; project deletion also hides its workflows and runs. Active runs or arena sessions prevent deletion. Postgres tombstones retain the immutable security audit evidence; this is not a purge of stored content. Apply database migrations before serving these routes.

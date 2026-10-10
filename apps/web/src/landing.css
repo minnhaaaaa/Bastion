@@ -69,3 +69,17 @@
 
 .intro__copy { max-width: 780px; }
 .intro__actions .btn, .arena-invite .btn { background: var(--paper); color: var(--ink); }
+
+/* Layered cards retain Bastion's palette without decorative emblems. */
+.landing-parallax { overflow: clip; }
+.bastion-home .threat-grid { gap: 20px; border: 0; padding-block: 24px; }
+.threat-card-depth, .threat-tilt { min-width: 0; height: 100%; }
+.bastion-home .threat-tile { position: relative; isolation: isolate; overflow: hidden; height: 100%; border: 1px solid var(--line-ink); border-radius: 12px; background: var(--ink-2); color: var(--paper); padding: 32px; }
+.bastion-home .threat-tile__head { color: var(--paper-dim); letter-spacing: .12em; text-transform: uppercase; }
+.bastion-home .threat-tile__head > span:last-child { font-size: 11px; line-height: 1.5; }
+.bastion-home .threat-tile h3 { position: relative; margin-block: 48px 36px; }
+.bastion-home .threat-route { position: relative; gap: 16px; color: var(--paper-dim); }
+.bastion-home .threat-route strong { border-color: var(--line-paper); color: var(--paper); }
+.threat-spotlight { position: absolute; z-index: -1; pointer-events: none; border-radius: 50%; background: radial-gradient(circle, var(--vermillion) 0%, transparent 72%); filter: blur(22px); transition: opacity .2s; }
+@media (max-width: 700px) { .bastion-home .threat-grid { gap: 24px; } .bastion-home .threat-tile { padding: 26px; } }
+@media (prefers-reduced-motion: reduce) { .threat-spotlight { display: none; } }

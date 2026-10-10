@@ -29,6 +29,20 @@
       "when": 1791574822901,
       "tag": "0003_project_connections",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791584072899,
+      "tag": "0004_unknown_black_panther",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791607287585,
+      "tag": "0005_workspace_deletion",
+      "breakpoints": true
     }
   ]
 }

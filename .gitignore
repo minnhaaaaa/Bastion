@@ -16,3 +16,6 @@ test-results/
 
 apps/web/src-tauri/target/
 apps/web/src-tauri/desktop.generated.json
+
+# Local runtime artifact storage
+.local/blobs/
