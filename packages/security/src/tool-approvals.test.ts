@@ -83,3 +83,13 @@ it("blocks stopped executions and changed input sets before consuming the approv
   expect(stopped.record.status).toBe("PENDING"); expect(inputs.record.status).toBe("PENDING");
   expect(stopped.execute).not.toHaveBeenCalled(); expect(inputs.execute).not.toHaveBeenCalled();
 });
+
+it("rejects approval after a grant is revoked or changed to allow, without consuming it", async () => {
+  for (const decision of ["DENY", "ALLOW"] as const) {
+    const s = await setup();
+    s.context.mockResolvedValue({ ...(await s.context()), policy: { evaluate: () => ({ decision, ruleId: crypto.randomUUID(), reason: "Policy changed after review was requested" }) } });
+    expect((await s.service.approve(s.input)).status).toBe("DENIED");
+    expect(s.record.status).toBe("PENDING");
+    expect(s.execute).not.toHaveBeenCalled();
+  }
+});

