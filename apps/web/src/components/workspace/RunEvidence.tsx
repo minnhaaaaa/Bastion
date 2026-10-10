@@ -1,3 +1,6 @@
+import { DetailDisclosure } from "./DetailDisclosure";
+import { Response } from "./RunChat";
+import { chatArtifacts } from "../../lib/chat-evidence";
 import type { ModelConnection } from "./Connections";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
@@ -32,7 +35,13 @@ export function RunEvidence({ snapshot, token, onTrace }: { snapshot: RunSnapsho
   const checks = snapshot.verification;
   const unavailable = metrics.data?.unsafeActionsExecuted == null;
   return <section className="desk-run-evidence" aria-label="Run verification">
-    <div className="desk-section-label"><span>Execution evidence</span><button className="desk-subtle" onClick={onTrace}><GitBranch /> Trace causes</button></div>
+    <DetailDisclosure title="Agent assessment">
+    {chatArtifacts(snapshot).map(artifact => <DetailDisclosure key={artifact.id} title={artifact.name}>
+      <Response snapshot={snapshot} artifact={artifact} token={token} animate={false} />
+    </DetailDisclosure>)}
+    {!chatArtifacts(snapshot).length && <p className="desk-hint">No final agent response recorded yet.</p>}
+    </DetailDisclosure>
+    <DetailDisclosure title="Execution evidence"><div className="desk-section-label"><button className="desk-subtle" onClick={onTrace}><GitBranch /> Trace causes</button></div>
     <ErrorBox error={metrics.error} />
     <button className="desk-secondary" disabled={exporting} onClick={() => void exportTrace()}><Download />{exporting ? "Exporting…" : "Export recorded trace"}</button>
     <ErrorBox error={exportError} />
@@ -42,20 +51,21 @@ export function RunEvidence({ snapshot, token, onTrace }: { snapshot: RunSnapsho
       <div><dt>Task execution</dt><dd>{metrics.data.tasks.succeeded} / {metrics.data.tasks.total} succeeded</dd></div>
     </dl>}
     <p className="desk-hint">Denials show policy decisions. The sandbox audit measures effects. Task success alone does not verify the result.</p>
-    <div className="desk-section-label">Recorded verification</div>
+    </DetailDisclosure>
+    <DetailDisclosure title="Recorded verification">
     {!checks?.length ? <p className="desk-hint">No completed verification recorded for this run.</p> : <ul className="desk-verification-list">{checks.map((check, index) => <li key={`${check.name}-${index}`} className={check.passed ? "" : "desk-check-failed"}>{check.passed ? <Check /> : <ShieldAlert />}<div><strong>{check.name.replaceAll("_", " ").replaceAll(".", " · ")}</strong><span>{check.passed ? "Passed" : "Not passed"}</span>{check.detail && <p>{check.detail}</p>}</div></li>)}</ul>}
     {unavailable && <p className="desk-hint"><CircleHelp /> Missing audit evidence cannot establish that no unsafe action occurred.</p>}
-    <details className="desk-result"><summary>Agent models for this run</summary><ErrorBox error={models.error} />{models.data && (Object.keys(models.data.bindings).length ? Object.entries(models.data.bindings).map(([agent, connectionId]) => { const connection = models.data.connections.find(item => item.id === connectionId); return <p key={agent}><code>{agent}</code><br />{connection ? `${connection.provider} · ${connection.model}` : "Connection unavailable"}</p>; }) : <p>No per-agent model assignment was recorded for this older workflow. Current controller settings cannot establish its historical model.</p>)}</details>
-    <details className="desk-result"><summary>Policies for this run</summary>
+    </DetailDisclosure>
+    <DetailDisclosure title="Agent models for this run"><ErrorBox error={models.error} />{models.data && (Object.keys(models.data.bindings).length ? Object.entries(models.data.bindings).map(([agent, connectionId]) => { const connection = models.data.connections.find(item => item.id === connectionId); return <p key={agent}><code>{agent}</code><br />{connection ? `${connection.provider} · ${connection.model}` : "Connection unavailable"}</p>; }) : <p>No per-agent model assignment was recorded for this older workflow. Current controller settings cannot establish its historical model.</p>)}</DetailDisclosure>
+    <DetailDisclosure title="Policies for this run">
       <ErrorBox error={workflow.error} />
       {workflow.isPending ? <p role="status">Loading policies…</p> : workflow.data && <>
         <p className="desk-hint">Workflow version {workflow.data.version}. These rules are fixed for this run; ungranted actions are denied.</p>
         {!workflow.data.definition.policyRules.length && <p>No tool permissions granted.</p>}
         {workflow.data.definition.policyRules.map(rule => <article className="desk-result" key={rule.id}><strong>{rule.decision} · {rule.operation}</strong><p>{rule.description}</p><code>{rule.resourcePattern}</code></article>)}
       </>}
-    </details>
-    <details className="desk-result">
-      <summary>Compare recorded runs</summary>
+    </DetailDisclosure>
+    <DetailDisclosure title="Compare recorded runs">
       <p className="desk-hint">Compare the same workflow with and without policy enforcement. This does not start a new run.</p>
       <ErrorBox error={runs.error || comparison.error} />
       <DataSelect aria-label="Comparison run" value={selectedOther} onValueChange={setOtherRun} disabled={runs.isPending || !candidates.length}>
@@ -72,6 +82,6 @@ export function RunEvidence({ snapshot, token, onTrace }: { snapshot: RunSnapsho
           <tr><th scope="row">Verified completion</th><td>{comparison.data.protected.legitimateCompletion ? "Yes" : "No"}</td><td>{comparison.data.baseline.legitimateCompletion ? "Yes" : "No"}</td></tr>
         </tbody></table></div>
       </>}
-    </details>
+    </DetailDisclosure>
   </section>;
 }

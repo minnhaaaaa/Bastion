@@ -1,3 +1,4 @@
+import { DetailDisclosure } from "./DetailDisclosure";
 import { useState } from "react";
 import { newId, type RunSnapshot } from "@bastion/contracts";
 import { api } from "../../lib/api";
@@ -48,15 +49,15 @@ export function Incidents({
   const incidents = Object.values(s.incidents);
   if (!incidents.length)
     return (
-      <Empty title="No recorded incidents">
-        Security incidents will appear here when the run records them.
+      <Empty title="No backend incidents recorded">
+        The controller has not recorded an incident for this run. An agent may still have reported an injection attempt in its response; review Agent assessment above. This is not evidence that the inputs were attack-free.
       </Empty>
     );
   return (
     <div className="incident-list">
       <ErrorBox error={error} />
       {incidents.map((inc) => (
-        <article className="incident-card" key={inc.id}>
+        <DetailDisclosure key={inc.id} title={`Incident · ${s.sources[inc.sourceVersionId]?.name ?? inc.id}`}>
           <div className="incident-title">
             <span className="status-badge">
               {inc.severity} / {inc.state}
@@ -170,7 +171,7 @@ export function Incidents({
                 </div>
               ) : null;
             })}
-        </article>
+        </DetailDisclosure>
       ))}
     </div>
   );

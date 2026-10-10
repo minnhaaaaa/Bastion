@@ -1,3 +1,4 @@
+import { injectionFindingRecorder } from "./injection-findings";
 import { taskAttachmentStore } from "../task-attachments";
 import { ProviderConnections } from "../provider-connections";
 import { and, eq } from "drizzle-orm";
@@ -144,6 +145,7 @@ export function buildAgentRuntime(input: {
   // Agents get the waiting gateway: an approval-gated call blocks until a human resolves it.
   const gateway = toolApprovals.wrap(policyGateway);
 
+  const reportFinding = injectionFindingRecorder(journal, (runId, versionId) => broker.content(runId, versionId));
   const scheduler = new WorkflowScheduler({
     journal,
     broker,
@@ -172,7 +174,7 @@ export function buildAgentRuntime(input: {
         if (assigned && Object.keys(assigned.bindings).length) throw new Error("Provider connection storage is required for this workflow");
       }
       const config = providerConnections ? await providerConnections.forExecution(workflow, context.task.agentId) : pi;
-      return input.createAgent ? input.createAgent(enriched, gateway, tools) : piRuntimeForExecution({ context: enriched, cwd: sandbox.hostRoot, config, tools, gateway });
+      return input.createAgent ? input.createAgent(enriched, gateway, tools) : piRuntimeForExecution({ context: enriched, cwd: sandbox.hostRoot, config, tools, gateway, reportFinding: reportFinding({ runId: context.runId, executionId: context.executionId, traceId: context.traceId, taskId: context.task.id, agentId: context.task.agentId, inputVersionIds: context.inputVersionIds }) });
     },
   });
 

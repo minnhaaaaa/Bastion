@@ -1,4 +1,4 @@
-import { motion, useReducedMotion } from "framer-motion";
+import { MagneticCursor } from "../components/ui/magnetic-cursor";
 import { Reveal } from "../components/wenvy/Reveal";
 import { Terminal } from "../components/wenvy/Terminal";
 import { Header, Footer } from "../components/ui";
@@ -19,13 +19,12 @@ const steps = [
 ];
 
 export function Landing() {
-  const reduced = useReducedMotion();
   return (
-    <>
+    <MagneticCursor>
       <Header />
       <ParallaxComponent><main id="main" tabIndex={-1} className="wenvy-site bastion-home">
         <section className="intro" data-parallax-layers aria-labelledby="intro-title">
-          <motion.div className="intro__copy" initial={reduced ? false : { opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: reduced ? 0 : 0.65 }}>
+          <div className="intro__copy">
             <span className="intro__label">An agent workspace. Security built in.</span>
             <div data-parallax-layer="24"><h1 id="intro-title">Build freely.<br /><em>Act securely.</em></h1></div>
             <p>Stop the breach.<br />Save the workflow.</p>
@@ -33,7 +32,7 @@ export function Landing() {
               <a className="btn btn--solid" href="/dashboard">Open console <span aria-hidden="true">↗</span></a>
               <a className="intro__link" href="/arena">Enter arena <span aria-hidden="true">→</span></a>
             </div>
-          </motion.div>
+          </div>
           <a className="intro__scroll" href="#security">Explore the boundaries <span aria-hidden="true">↓</span></a>
         </section>
 
@@ -77,6 +76,6 @@ export function Landing() {
         </section>
       </main></ParallaxComponent>
       <Footer />
-    </>
+    </MagneticCursor>
   );
 }

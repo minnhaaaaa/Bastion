@@ -1,6 +1,7 @@
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import barba from "@barba/core";
+import gsap from "gsap";
 import { App } from "./App";
 import "./index.css";
 import { isDesktop, navigate } from "./lib/navigation";
@@ -32,10 +33,31 @@ async function fade(container: HTMLElement, incoming: boolean) {
     { duration: incoming ? 260 : 160, easing: "ease-out" },
   ).finished;
 }
+const loader = document.getElementById("transition-loader")!;
+function ready(container: HTMLElement) {
+  return new Promise<void>(resolve => {
+    const loaded = () => !!container.querySelector("#main:not(.page-loading)");
+    if (loaded()) { resolve(); return; }
+    const observer = new MutationObserver(() => { if (loaded()) finish(); });
+    const timeout = window.setTimeout(finish, 8000);
+    function finish() { observer.disconnect(); clearTimeout(timeout); resolve(); }
+    observer.observe(container, { subtree: true, childList: true });
+  });
+}
+async function reveal(container: HTMLElement, first = false) {
+  await ready(container);
+  if (reduced()) { gsap.set(loader, { autoAlpha: 0 }); return; }
+  try {
+    const timeline = gsap.timeline();
+    timeline.to(loader, { clipPath: "inset(0 0 100% 0)", duration: .85, ease: "power4.inOut" }, first ? .45 : 0);
+    await timeline;
+  } finally { gsap.set(loader, { autoAlpha: 0 }); }
+}
 const initial = document.querySelector<HTMLElement>(
   '[data-barba="container"]',
 )!;
 if (isDesktop() && window.location.pathname === "/") history.replaceState(null, "", "/dashboard");
+if (isDesktop() || window.location.pathname !== "/") gsap.set(loader, { autoAlpha: 0 });
 mount(initial, window.location.pathname);
 if (isDesktop()) {
   const showPage = () => {
@@ -60,10 +82,14 @@ if (isDesktop()) {
     {
       name: "bastion-boundary",
       async once({ next }) {
-        await fade(next.container, true);
+        if (window.location.pathname === "/") await reveal(next.container, true);
+        else await fade(next.container, true);
       },
       async leave({ current }) {
-        document.getElementById("transition-loader")!.classList.add("active");
+        if (!reduced()) {
+          gsap.set(loader, { autoAlpha: 1, clipPath: "inset(100% 0 0 0)" });
+          await gsap.to(loader, { clipPath: "inset(0 0 0 0)", duration: .4, ease: "power3.inOut" });
+        }
         current.container.inert = true;
         await fade(current.container, false);
         roots.get(current.container)?.unmount();
@@ -74,14 +100,12 @@ if (isDesktop()) {
         const path = destination.pathname;
         mount(next.container, path);
         window.scrollTo(0, 0);
-        await fade(next.container, true);
+        await reveal(next.container);
         if (destination.hash)
           document
             .getElementById(decodeURIComponent(destination.hash.slice(1)))
             ?.scrollIntoView();
-        document
-          .getElementById("transition-loader")!
-          .classList.remove("active");
+
         next.container
           .querySelector<HTMLElement>("#main")
           ?.focus({ preventScroll: true });

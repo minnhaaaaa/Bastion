@@ -83,3 +83,22 @@
 .threat-spotlight { position: absolute; z-index: -1; pointer-events: none; border-radius: 50%; background: radial-gradient(circle, var(--vermillion) 0%, transparent 72%); filter: blur(22px); transition: opacity .2s; }
 @media (max-width: 700px) { .bastion-home .threat-grid { gap: 24px; } .bastion-home .threat-tile { padding: 26px; } }
 @media (prefers-reduced-motion: reduce) { .threat-spotlight { display: none; } }
+
+/* Full-viewport chapters: maroon entrance, black boundaries, paper evidence. */
+.bastion-home .intro { min-height: 100svh; padding-top: 130px; padding-bottom: 110px; }
+.bastion-home .threats-section { position: relative; z-index: 2; min-height: 100svh; display: flex; flex-direction: column; justify-content: center; }
+.bastion-home .journal-section { position: relative; z-index: 2; min-height: 100svh; }
+.bastion-home .arena-invite { position: relative; z-index: 2; min-height: 100svh; }
+.landing-cursor-scope { display: contents; }
+.landing-fluid-cursor { position: fixed; left: 0; top: 0; width: 22px; height: 22px; opacity: 0; border-radius: 50%; z-index: 9998; pointer-events: none; background: var(--paper); mix-blend-mode: difference; will-change: transform; }
+@media (hover: none), (pointer: coarse), (prefers-reduced-motion: reduce) { .landing-fluid-cursor { display: none; } }
+@media (max-width: 700px) { .bastion-home .intro { min-height: 100svh; } .bastion-home .threats-section, .bastion-home .journal-section { padding-block: 100px; } }
+
+/* Balance the opening panel across the full viewport. */
+.bastion-home .intro { justify-items: center; text-align: center; }
+.bastion-home .intro__copy { width: 100%; max-width: 1120px; }
+.bastion-home .intro h1 { font-size: clamp(52px, 8.5vw, 128px); }
+.bastion-home .intro__label { margin-inline: auto; }
+.bastion-home .intro__actions { justify-content: center; }
+.bastion-home .intro__scroll { left: 50%; transform: translateX(-50%); white-space: nowrap; }
+@media (max-width: 700px) { .bastion-home .intro h1 { font-size: clamp(44px, 12vw, 76px); } }

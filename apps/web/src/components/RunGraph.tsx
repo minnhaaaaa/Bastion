@@ -1,4 +1,5 @@
-import { useMemo } from "react";
+import { TraceOrbit } from "./TraceOrbit";
+import { useMemo, useState } from "react";
 import {
   ReactFlow,
   Background,
@@ -13,10 +14,13 @@ import { Empty } from "./ui";
 export function RunGraph({
   snapshot,
   onSelect,
+  interactiveOrbit = false,
 }: {
   snapshot?: RunSnapshot;
   onSelect?: (id: string) => void;
+  interactiveOrbit?: boolean;
 }) {
+  const [layout, setLayout] = useState<"orbit" | "flow">("orbit");
   const graph = useMemo(() => {
     if (!snapshot) return { nodes: [], edges: [] };
     const view = toGraphView(snapshot);
@@ -79,7 +83,7 @@ export function RunGraph({
         dependencies.
       </Empty>
     );
-  return (
+  const flow = (
     <ReactFlow
       nodes={graph.nodes}
       edges={graph.edges}
@@ -94,4 +98,5 @@ export function RunGraph({
       <Controls showInteractive={false} />
     </ReactFlow>
   );
+  return interactiveOrbit ? <div className="trace-layout"><div className="trace-layout-switch" role="group" aria-label="Graph layout"><button type="button" aria-pressed={layout === "orbit"} onClick={() => setLayout("orbit")}>Orbit</button><button type="button" aria-pressed={layout === "flow"} onClick={() => setLayout("flow")}>Dependency flow</button></div>{layout === "orbit" && snapshot ? <TraceOrbit snapshot={snapshot} onSelect={onSelect} /> : flow}</div> : flow;
 }

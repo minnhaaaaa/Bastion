@@ -43,10 +43,7 @@ export function Masthead({ active = "" }: { active?: string }) {
           architecture
         </a>
       </nav>
-      <a className="mast__cta" href="/dashboard">
-        <span className="dot" />
-        console <span aria-hidden="true">↗</span>
-      </a>
+
     </header>
   );
 }

@@ -46,3 +46,22 @@ it("fails a task on its deadline even when the SDK ignores abort", async () => {
   expect(events).toEqual([{ kind: "finished", ok: false, error: "TIMEOUT" }]);
   expect(abort).toHaveBeenCalled();
 });
+
+it("registers controller reporting alongside gateway tools in the installed Pi session", async () => {
+  const model = ModelRegistry.create(AuthStorage.inMemory(), "").getAll()[0]!;
+  const receipt = { incidentId: newId("incident"), sourceVersionId: newId("source"), state: "OPEN" };
+  const reportFinding = vi.fn(async () => receipt);
+  const adapter = new PiRuntimeAdapter({
+    config: { authMode: "api-key", provider: model.provider, model: model.id, baseUrl: model.baseUrl, apiKey: crypto.randomUUID(), agentDir: process.cwd(), timeoutMs: 1000 },
+    tools: [], gateway: { dispatch: async () => { throw new Error("Reporting is not a file or network action"); } }, reportFinding,
+    taskContext: async () => ({ executionId: newId("exec"), traceId: newId("trace"), cwd: process.cwd(), prompt: crypto.randomUUID(), outputName: crypto.randomUUID() }),
+  });
+  const { sessionId } = await adapter.startTask({ runId: newId("run"), taskId: newId("task"), agentId: newId("agent"), inputArtifactIds: [], capabilities: [], workspaceId: process.cwd() });
+  const live = (adapter as unknown as { sessions: Map<string, { session: Awaited<ReturnType<typeof createAgentSession>>["session"] }> }).sessions.get(sessionId)!;
+  try {
+    expect(live.session.getActiveToolNames()).toEqual(["report_prompt_injection"]);
+    const tool = live.session.agent.state.tools![0]!;
+    await tool.execute(crypto.randomUUID(), { sourceVersionId: receipt.sourceVersionId, evidence: crypto.randomUUID(), reason: crypto.randomUUID(), severity: "HIGH" });
+    expect(reportFinding).toHaveBeenCalledTimes(1);
+  } finally { live.session.dispose(); }
+});

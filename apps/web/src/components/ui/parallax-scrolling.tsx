@@ -13,6 +13,10 @@ export function ParallaxComponent({ children }: { children: ReactNode }) {
     const media = gsap.matchMedia();
     media.add("(prefers-reduced-motion: no-preference)", () => {
       const lenis = new Lenis();
+      const intro = root.current?.querySelector<HTMLElement>(".intro");
+      if (intro) {
+        ScrollTrigger.create({ trigger: intro, start: "top top", end: () => `+=${intro.offsetHeight}`, pin: true, pinSpacing: false, invalidateOnRefresh: true });
+      }
       const tick = (time: number) => lenis.raf(time * 1000);
       lenis.on("scroll", ScrollTrigger.update);
       gsap.ticker.add(tick);
