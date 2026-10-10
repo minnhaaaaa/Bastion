@@ -15,14 +15,16 @@ export class FsBlobStore implements BlobStore {
 
   async put(content: string | Uint8Array) {
     const hex = sha256(content);
-    await mkdir(this.root, { recursive: true });
-    await writeFile(join(this.root, hex), content);
+    await mkdir(this.root, { recursive: true, mode: 0o700 });
+    await writeFile(join(this.root, hex), content, { mode: 0o600 });
     return { blobRef: `blob:sha256:${hex}`, contentHash: `sha256:${hex}` };
   }
 
   async get(blobRef: string) {
     const m = /^blob:sha256:([0-9a-f]{64})$/.exec(blobRef);
     if (!m) throw new Error(`invalid blobRef ${blobRef}`);
-    return new Uint8Array(await readFile(join(this.root, m[1]!)));
+    const content = await readFile(join(this.root, m[1]!));
+    if (sha256(content) !== m[1]) throw new Error("Blob content integrity check failed");
+    return new Uint8Array(content);
   }
 }

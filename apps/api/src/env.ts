@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ApiSecurity, parseSecurityConfig } from "./security-config";
 
 const seconds = z.coerce.number().int().positive();
 
@@ -8,6 +9,8 @@ const seconds = z.coerce.number().int().positive();
  */
 const Env = z.object({
   API_PORT: z.coerce.number().int().positive(),
+  API_BIND_HOST: z.string().min(1),
+  API_SECURITY_JSON: z.string().transform(value => parseSecurityConfig(ApiSecurity, value, "API_SECURITY_JSON")),
   WEB_ORIGIN: z.string().url(),
   // Explicit extra trusted clients, e.g. packaged desktop origins. No wildcard CORS.
   WEB_ADDITIONAL_ORIGINS: z.string().optional().transform((value, ctx) => {

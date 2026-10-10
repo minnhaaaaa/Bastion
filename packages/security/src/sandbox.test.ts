@@ -13,6 +13,13 @@ it("normalizes canonical paths, rejects traversal and strips URL credentials/red
     const client = new SandboxClient({ url: "http://127.0.0.1:1", token: crypto.randomUUID(), hostRoot: directory, workerRoot: "/workspace", timeoutMs: 1000, toolOperations: { file: "fs.read", http: "net.http", exec: "proc.exec" } });
     const base = { runId: newId("run"), taskId: newId("task"), agentId: newId("agent"), executionId: newId("exec"), traceId: newId("trace") };
     expect(await client.normalize({ ...base, tool: "file", args: { path: name } })).toEqual({ operation: "fs.read", resource: `/workspace/${name}` });
+    if (process.platform === "win32") {
+      const local = new SandboxClient({ url: "http://127.0.0.1:1", token: crypto.randomUUID(), hostRoot: directory, workerRoot: directory, timeoutMs: 1000, toolOperations: { file: "fs.read" } });
+      const expected = join(directory, name).replaceAll("\\", "/");
+      expect((await local.normalize({ ...base, tool: "file", args: { path: join(directory, name) } })).resource).toBe(expected);
+      expect((await local.normalize({ ...base, tool: "file", args: { path: name } })).resource).toBe(expected);
+      await expect(local.normalize({ ...base, tool: "file", args: { path: join(directory, "..", "outside") } })).rejects.toThrow("escapes");
+    }
     await expect(client.normalize({ ...base, tool: "file", args: { path: "../outside" } })).rejects.toThrow("escapes");
     await expect(client.normalize({ ...base, tool: "http", args: { url: "http://user:password@example.test" } })).rejects.toThrow();
     await expect(client.normalize({ ...base, tool: "unknown", args: {} })).rejects.toThrow();

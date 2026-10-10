@@ -30,14 +30,19 @@ export class WorkflowPolicyEngine implements PolicyEngine {
   constructor(definition: WorkflowDefinition) { this.workflow = WorkflowDefinition.parse(definition); }
   evaluate(request: PolicyRequest): PolicyResult {
     const req = PolicyRequest.parse(request);
+    const fileOperation = req.operation === "fs.read" || req.operation === "fs.write";
+    const matchResource = (pattern: string, resource: string) => matches(
+      fileOperation ? pattern.replaceAll("\\", "/") : pattern,
+      fileOperation ? resource.replaceAll("\\", "/") : resource,
+    );
     const agent = this.workflow.agents.find(a => a.id === req.agentId);
     const granted = agent?.capabilities.some(capability => {
       const colon = capability.indexOf(":");
       const resource = req.operation === "net.http" ? new URL(req.resource).hostname : req.resource;
-      return capability.slice(0, colon) === req.operation && matches(capability.slice(colon + 1), resource);
+      return capability.slice(0, colon) === req.operation && matchResource(capability.slice(colon + 1), resource);
     });
     if (!granted) return { decision: "DENY", ruleId: "default.deny", reason: "Agent capability does not grant this operation" };
-    const rules = this.workflow.policyRules.filter(r => r.operation === req.operation && matches(r.resourcePattern, req.resource));
+    const rules = this.workflow.policyRules.filter(r => r.operation === req.operation && matchResource(r.resourcePattern, req.resource));
     const rule = rules.find(r => r.decision === "DENY") ?? rules.find(r => r.decision === "REQUIRE_APPROVAL") ?? rules.find(r => r.decision === "ALLOW");
     return rule ? { decision: rule.decision, ruleId: rule.id, reason: rule.description } : { decision: "DENY", ruleId: "default.deny", reason: "No workflow policy grants this operation" };
   }

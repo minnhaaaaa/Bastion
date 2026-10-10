@@ -35,6 +35,15 @@ async function main() {
         if (instructions) console.log(instructions);
       },
       onPrompt: ({ message }) => prompt.question(`${message}: `, { signal: abort.signal }),
+      onDeviceCode: ({ verificationUri, userCode }) => {
+        console.log(`Open ${verificationUri} and enter the code: ${userCode}`);
+      },
+      onSelect: async ({ message, options }) => {
+        console.log(message);
+        for (const option of options) console.log(`${option.id}: ${option.label}`);
+        const selected = (await prompt.question("Choose an option ID (blank cancels): ", { signal: abort.signal })).trim();
+        return options.some(option => option.id === selected) ? selected : undefined;
+      },
       onProgress: message => console.log(message),
       signal: abort.signal,
     });

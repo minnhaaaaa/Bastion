@@ -1,4 +1,5 @@
 import { redactText } from "@bastion/provenance";
+import { publicEvent } from "../public-view";
 import { TaskDocument, attachTaskSources } from "../task-attachments";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { schema } from "@bastion/db";
@@ -229,8 +230,8 @@ export function coreRoutes(
     const actor = await any(req);
     const { id } = IdParam.parse(req.params);
     const q = z.object({ after: z.coerce.number().int().min(0).optional(), limit: z.coerce.number().int().min(1).max(1000).optional() }).parse(req.query);
-    await x.access.readRun(actor, id);
-    return d.journal.read(id, q.after ?? 0, q.limit ?? 500);
+    const snapshot = await x.access.readRun(actor, id);
+    return (await d.journal.read(id, q.after ?? 0, q.limit ?? 500)).map(event => publicEvent(event, snapshot));
   });
 
   app.get("/api/runs/:id/graph", async (req) => {

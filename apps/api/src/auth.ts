@@ -13,6 +13,7 @@ export const hashToken = (token: string) => createHash("sha256").update(token).d
 export const newSecret = (bytes = 32) => randomBytes(bytes).toString("base64url");
 
 export class Authenticator {
+  private readonly requestActors = new WeakMap<FastifyRequest, Promise<Actor | null>>();
   constructor(
     private readonly db: Db,
     /** token → userId, from OPERATOR_TOKENS */
@@ -29,18 +30,22 @@ export class Authenticator {
     const h = hashToken(token);
     const [room] = await this.db.select().from(schema.arenaRooms).where(eq(schema.arenaRooms.hostTokenHash, h));
     // Tokens die with their room.
-    if (room) return room.status === "EXPIRED" ? null : { kind: "host", userId: room.hostId, roomId: room.id };
+    if (room) return room.status === "EXPIRED" || Date.parse(room.expiresAt) <= Date.now() ? null : { kind: "host", userId: room.hostId, roomId: room.id };
     const [player] = await this.db.select().from(schema.arenaPlayers).where(eq(schema.arenaPlayers.tokenHash, h));
     if (player) {
-      const [r] = await this.db.select({ status: schema.arenaRooms.status }).from(schema.arenaRooms).where(eq(schema.arenaRooms.id, player.roomId));
-      return r?.status === "EXPIRED" ? null : { kind: "player", playerId: player.id, roomId: player.roomId };
+      const [r] = await this.db.select().from(schema.arenaRooms).where(eq(schema.arenaRooms.id, player.roomId));
+      return !r || r.status === "EXPIRED" || Date.parse(r.expiresAt) <= Date.now() ? null : { kind: "player", playerId: player.id, roomId: player.roomId };
     }
     return null;
   }
 
   async fromRequest(req: FastifyRequest): Promise<Actor | null> {
+    const existing = this.requestActors.get(req);
+    if (existing) return existing;
     const h = req.headers.authorization;
-    return this.resolve(h?.startsWith("Bearer ") ? h.slice(7) : undefined);
+    const actor = this.resolve(h?.startsWith("Bearer ") ? h.slice(7) : undefined);
+    this.requestActors.set(req, actor);
+    return actor;
   }
 }
 

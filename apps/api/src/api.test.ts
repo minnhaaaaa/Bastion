@@ -161,7 +161,7 @@ describe("REST", () => {
 describe("Arena", () => {
   it("join → start → private roles → attack window → real run with queued attack → reveal", async () => {
     const rl = recordingLauncher();
-    t = await createTestApp({ launcher: rl.launcher, briefingMs: 50, attackWindowMs: 400 });
+    t = await createTestApp({ launcher: rl.launcher, briefingMs: 1000, attackWindowMs: 1000 });
     rl.bind(t);
     const { workflow, definition } = await setupProjectAndWorkflow(t);
     const room = (await t.app.inject({ method: "POST", url: "/api/arena/rooms", headers: t.auth(t.tokenA), payload: { commandId: newId("command"), workflowId: workflow.id } })).json();
@@ -182,6 +182,7 @@ describe("Arena", () => {
     // Players cannot use host controls.
     expect((await t.app.inject({ method: "POST", url: `/api/arena/rooms/${room.roomId}/start`, headers: t.auth(p1.playerToken), payload: { commandId: newId("command") } })).statusCode).toBe(403);
     expect((await t.app.inject({ method: "POST", url: `/api/arena/rooms/${room.roomId}/start`, headers: host, payload: { commandId: newId("command") } })).statusCode).toBe(202);
+    await t.arena.pause(room.roomId);
 
     const me = async (p: { playerToken: string }) => (await t!.app.inject({ method: "GET", url: `/api/arena/rooms/${room.roomId}/me`, headers: t!.auth(p.playerToken) })).json();
     const [m1, m2] = [await me(p1), await me(p2)];
@@ -197,7 +198,8 @@ describe("Arena", () => {
     const act = (p: { playerToken: string }, body: object) =>
       t!.app.inject({ method: "POST", url: `/api/arena/rooms/${room.roomId}/actions`, headers: t!.auth(p.playerToken), payload: body });
     const attackCmd = { commandId: newId("command"), card: "POISON_DOCUMENT", attackPayloadId: options[0].id };
-    // Still in BRIEFING
+    // Freeze BRIEFING during inspection so CPU load cannot move the phase before the assertion.
+    await t.arena.resume(room.roomId);
     expect((await act(attacker, attackCmd)).json().outcome).toBe("REJECTED");
     await waitFor(async () => (await t!.app.inject({ method: "GET", url: `/api/arena/rooms/${room.roomId}` })).json().phase === "ATTACK_WINDOW");
     const ok = await act(attacker, { ...attackCmd, commandId: newId("command") });

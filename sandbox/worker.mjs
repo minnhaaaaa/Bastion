@@ -1,5 +1,6 @@
 import { createServer } from 'node:http';
-import { appendFile, readFile, writeFile, realpath, stat } from 'node:fs/promises';
+import { appendFile, open, realpath } from 'node:fs/promises';
+import { constants } from 'node:fs';
 import { resolve, relative, dirname, basename, isAbsolute } from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -18,7 +19,7 @@ const commands = JSON.parse(required('SANDBOX_EXEC_COMMANDS'));
 const timeout = integer('SANDBOX_TIMEOUT_MS');
 const limit = integer('SANDBOX_MAX_BYTES');
 if (!Array.isArray(hosts) || hosts.some(h => typeof h !== 'string' || new URL(h).origin !== h)) throw new Error('Invalid HTTP origins');
-if (!Array.isArray(commands) || commands.some(c => typeof c !== 'string' || !isAbsolute(c))) throw new Error('Invalid exec command allowlist');
+if (!Array.isArray(commands) || commands.some(c => !c || typeof c.executable !== 'string' || !isAbsolute(c.executable) || !Array.isArray(c.argv) || c.argv.some(a => typeof a !== 'string'))) throw new Error('Exec allowlist requires exact executable and argv pairs');
 const inside = path => { const rel = relative(root, path); if (rel === '..' || rel.startsWith('../') || rel.startsWith('..\\') || isAbsolute(rel)) throw new Error('Path escapes sandbox'); return path; };
 async function filePath(input, write) {
   if (typeof input !== 'string') throw new Error('Missing path');
@@ -34,15 +35,28 @@ export async function execute(body) {
   const record = () => appendFile(audit, JSON.stringify({ at: new Date().toISOString(), toolRequestId, executionId, operation, resource }) + '\n');
   if (operation === 'fs.read') {
     const path = await filePath(resource, false);
-    if ((await stat(path)).size > limit) throw new Error('Output exceeds limit');
-    await record();
-    const content = await readFile(path);
-    if (content.length > limit) throw new Error('Output exceeds limit');
-    output = content.toString('utf8');
+    const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+    try {
+      if (!(await file.stat()).isFile()) throw new Error('Regular files only');
+      await record();
+      const content = Buffer.alloc(limit + 1); let bytes = 0;
+      while (bytes < content.length) {
+        const read = await file.read(content, bytes, content.length - bytes, null);
+        if (!read.bytesRead) break;
+        bytes += read.bytesRead;
+      }
+      if (bytes > limit) throw new Error('Output exceeds limit');
+      output = content.subarray(0, bytes).toString('utf8');
+    } finally { await file.close(); }
   } else if (operation === 'fs.write') {
     const path = await filePath(resource, true);
     if (typeof args.content !== 'string' || Buffer.byteLength(args.content) > limit) throw new Error('Invalid write content');
-    await record(); await writeFile(path, args.content); output = { bytes: Buffer.byteLength(args.content) };
+    const file = await open(path, constants.O_WRONLY | constants.O_CREAT | constants.O_NOFOLLOW, 0o600);
+    try {
+      if (!(await file.stat()).isFile()) throw new Error('Regular files only');
+      await record(); await file.truncate(0); await file.writeFile(args.content);
+      output = { bytes: Buffer.byteLength(args.content) };
+    } finally { await file.close(); }
   } else if (operation === 'net.http') {
     const url = new URL(resource);
     if (!hosts.includes(url.origin) || url.username || url.password) throw new Error('Destination denied');
@@ -55,7 +69,7 @@ export async function execute(body) {
     output = Buffer.concat(parts).toString('utf8');
   } else if (operation === 'proc.exec') {
     // Exact executable allowlist, no shell, no agent-selected environment variables.
-    if (typeof args.executable !== 'string' || !commands.includes(args.executable) || !Array.isArray(args.argv) || args.argv.some(a => typeof a !== 'string') || resource !== JSON.stringify([args.executable, ...args.argv])) throw new Error('Command denied');
+    if (typeof args.executable !== 'string' || !Array.isArray(args.argv) || args.argv.some(a => typeof a !== 'string') || !commands.some(c => c.executable === args.executable && JSON.stringify(c.argv) === JSON.stringify(args.argv)) || resource !== JSON.stringify([args.executable, ...args.argv])) throw new Error('Command denied');
     await record();
     const result = await promisify(execFile)(args.executable, args.argv, { cwd: root, env: {}, timeout, maxBuffer: limit, shell: false });
     output = { stdout: result.stdout, stderr: result.stderr };

@@ -1,5 +1,5 @@
 import { realpath } from "node:fs/promises";
-import { dirname, isAbsolute, relative, resolve, posix } from "node:path";
+import { dirname, isAbsolute, relative, resolve, posix, win32 } from "node:path";
 import type { PolicyRequest, ToolCall } from "@bastion/contracts";
 import type { NormalizedCall } from "./index";
 
@@ -27,7 +27,9 @@ export class SandboxClient {
       const root = await realpath(this.config.hostRoot);
       const input = call.args.path;
       // Agent paths use the container namespace; resolve them against the mirrored host mount.
-      const rel = posix.isAbsolute(input) ? posix.relative(this.config.workerRoot, input) : input;
+      const nativeWorker = win32.isAbsolute(this.config.workerRoot) && !posix.isAbsolute(this.config.workerRoot);
+      const rel = nativeWorker && win32.isAbsolute(input) ? win32.relative(this.config.workerRoot, input)
+        : posix.isAbsolute(input) ? posix.relative(this.config.workerRoot, input) : input;
       const candidate = resolve(root, rel);
       const check = (path: string) => { const suffix = relative(root, path); if (suffix === ".." || suffix.startsWith("..\\") || suffix.startsWith("../") || isAbsolute(suffix)) throw new Error("Path escapes sandbox"); return suffix; };
       check(candidate);
@@ -35,7 +37,7 @@ export class SandboxClient {
       try { canonical = await realpath(candidate); }
       catch (error) { if (operation !== "fs.write" || (error as NodeJS.ErrnoException).code !== "ENOENT") throw error; canonical = resolve(await realpath(dirname(candidate)), relative(dirname(candidate), candidate)); }
       const suffix = check(canonical).replaceAll("\\", "/");
-      return { operation, resource: posix.resolve(this.config.workerRoot, suffix) };
+      return { operation, resource: nativeWorker ? win32.resolve(this.config.workerRoot, suffix).replaceAll("\\", "/") : posix.resolve(this.config.workerRoot, suffix) };
     }
     if (operation === "net.http") {
       if (typeof call.args.url !== "string") throw new Error("Missing URL");

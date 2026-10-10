@@ -6,13 +6,13 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:?set in .env}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
       POSTGRES_DB: ${POSTGRES_DB:?set in .env}
-    ports: ["${POSTGRES_PORT:?set in .env}:5432"]
+    ports: ["${POSTGRES_PUBLISH_HOST:?set in .env}:${POSTGRES_PORT:?set in .env}:5432"]
     volumes: [pgdata:/var/lib/postgresql/data]
   neo4j:
     image: neo4j:5
     environment:
       NEO4J_AUTH: ${NEO4J_USER:?set in .env}/${NEO4J_PASSWORD:?set in .env}
-    ports: ["${NEO4J_HTTP_PORT:?set in .env}:7474", "${NEO4J_BOLT_PORT:?set in .env}:7687"]
+    ports: ["${NEO4J_PUBLISH_HOST:?set in .env}:${NEO4J_HTTP_PORT:?set in .env}:7474", "${NEO4J_PUBLISH_HOST:?set in .env}:${NEO4J_BOLT_PORT:?set in .env}:7687"]
     volumes: [neo4jdata:/data]
 volumes:
   pgdata:

@@ -23,6 +23,6 @@ Select the saved workflow under Advanced. Configure optional model assignments i
 
 ## Compare honestly
 
-If a sandboxed baseline is part of your submitted trial, use the same workflow version and attack content as the protected run. Security → Compare recorded runs indicates whether those conditions match. Baseline removes policy enforcement and can cause real sandbox effects; it is not automatically started by the walkthrough.
+Production controllers reject new baseline executions. Security → Compare recorded runs can inspect historical protected/baseline evidence and indicates whether workflow versions and attack content match. Automated tests retain isolated baseline positive controls. A new live baseline trial requires a separately designed disposable worker service before it can be enabled.
 
 Report failed checks, missing audit evidence, provider failures, and model refusals. Repeat on different inputs and providers when quota permits. Passing a bounded set of trials does not establish universal protection against injection, jailbreaks, hallucinations, or leakage. A lineage graph explains information flow; it does not independently establish truth.

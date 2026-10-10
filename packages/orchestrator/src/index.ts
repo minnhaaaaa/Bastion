@@ -27,6 +27,8 @@ export class WorkflowScheduler implements Scheduler {
     runtime(context: ExecutionContext): Promise<AgentRuntimeAdapter>;
     /** Controller-owned checks, after model completion and before publishing success. */
     verifyExecution?(context: ExecutionContext): Promise<boolean>;
+    /** Conservative classification of tool results as well as declared inputs. */
+    outputClassification?(context: ExecutionContext): Classification | Promise<Classification>;
     workspaceForRun(runId: string): Promise<string>;
     withExecutionFence<T>(executionId: string, operation: () => Promise<T>): Promise<T>;
   }) {
@@ -195,7 +197,7 @@ export class WorkflowScheduler implements Scheduler {
         if (a.held) return;
         if (!result.ok || outputs.length !== 1 || outputs[0]!.name !== declared.produces) throw new Error("Runtime did not produce the declared output");
         if (!(await Promise.all(inputVersionIds.map(id => this.options.broker.isUsable(id)))).every(Boolean)) throw new Error("Input quarantined before publication");
-        const classification: Classification = inputs.some(i => i.classification === "SYNTHETIC_SECRET") ? "SYNTHETIC_SECRET" : inputs.some(i => i.classification === "INTERNAL") ? "INTERNAL" : "PUBLIC";
+        const classification: Classification = await this.options.outputClassification?.(context) ?? (inputs.some(i => i.classification === "SYNTHETIC_SECRET") ? "SYNTHETIC_SECRET" : inputs.some(i => i.classification === "INTERNAL") ? "INTERNAL" : "PUBLIC");
         const artifact = await this.options.broker.publish({ runId, name: declared.produces, producerExecutionId: a.executionId, producerTaskId: a.task.id, content: outputs[0]!.content, classification, traceId });
         a.outputId = artifact.id;
         await this.transition(runId, a, "SUCCEEDED");

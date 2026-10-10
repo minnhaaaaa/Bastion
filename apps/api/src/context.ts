@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, count, notInArray } from "drizzle-orm";
 import {
   newId,
   type GraphProjector,
@@ -22,9 +22,12 @@ import type { ToolApprovalCoordinator } from "./toolApprovals";
 import type { FastifyBaseLogger } from "fastify";
 import type { Actor } from "./auth";
 import { HttpError, forbidden, notFound } from "./errors";
+import { publicSnapshot } from "./public-view";
 
 /** Everything the HTTP/socket layer needs. Built by the composition root (index.ts) or tests. */
 export interface AppDeps {
+  /** Baseline is available only to explicitly isolated test launchers. Production omits it. */
+  baselineEnabled?: boolean;
   providerConnections?: import("./provider-connections").ProviderConnections;
   chatgptAuth?: import("./chatgpt-auth").ChatGPTAuth;
   repositoryConnector?: import("./repository-access").RepositoryConnector;
@@ -48,6 +51,7 @@ export interface AppDeps {
   /** Model/runtime configuration recorded in exports (never credentials). */
   runtimeInfo?: { provider: string; model: string; timeoutMs: number };
   config: {
+    security: import("./security-config").ApiSecurity;
     roomTtlMs: number;
     briefingMs: number;
     attackWindowMs: number;
@@ -85,14 +89,14 @@ export class Access {
     if (!projectId) return false;
     if (actor.kind === "operator") return (await this.d.projects.get(projectId))?.ownerId === actor.userId;
     const [room] = await this.d.db.select().from(schema.arenaRooms).where(eq(schema.arenaRooms.id, actor.roomId));
-    return room?.runId === runId;
+    return room?.runId === runId && room.status !== "EXPIRED" && Date.parse(room.expiresAt) > (this.d.now?.() ?? new Date()).getTime();
   }
 
   async readRun(actor: Actor, runId: string): Promise<RunSnapshot> {
     if (!(await this.canReadRun(actor, runId))) throw notFound("run");
     const s = await this.d.journal.snapshot(runId);
     if (!s) throw notFound("run");
-    return s;
+    return publicSnapshot(s);
   }
 
   async operatorRun(actor: Actor, runId: string): Promise<RunSnapshot> {
@@ -110,6 +114,7 @@ export class Access {
 
 /** Starts runs: run.created is committed by the API; the runtime (Member 2) does the rest. */
 export class RunService {
+  private readonly starts = new Map<string, Promise<unknown>>();
   constructor(
     private readonly d: AppDeps,
     private readonly log: FastifyBaseLogger,
@@ -121,6 +126,24 @@ export class RunService {
   }
 
   async start(workflow: Workflow, mode: "PROTECTED" | "BASELINE", attackPayloadIds: string[]): Promise<string> {
+    const project = await this.d.projects.get(workflow.projectId);
+    if (!project) throw notFound("project");
+    const key = project.ownerId;
+    const previous = this.starts.get(key) ?? Promise.resolve();
+    const pending = previous.catch(() => {}).then(() => this.startUnlocked(workflow, mode, attackPayloadIds, key));
+    this.starts.set(key, pending);
+    try { return await pending; }
+    finally { if (this.starts.get(key) === pending) this.starts.delete(key); }
+  }
+
+  private async startUnlocked(workflow: Workflow, mode: "PROTECTED" | "BASELINE", attackPayloadIds: string[], ownerId: string): Promise<string> {
+    if (mode === "BASELINE" && !this.d.baselineEnabled) throw forbidden("Baseline execution requires an isolated test launcher; it is disabled on this controller");
+    const definition = workflow.definition;
+    const budget = this.d.config.security;
+    const [active] = await this.d.db.select({ total: count() }).from(schema.runs)
+      .innerJoin(schema.projects, eq(schema.runs.projectId, schema.projects.id)).where(and(eq(schema.projects.ownerId, ownerId), notInArray(schema.runs.status, ["COMPLETED", "RECOVERED", "FAILED", "RECOVERY_FAILED"])));
+    if (active!.total >= budget.maxActiveRunsPerOwner) throw new HttpError("RATE_LIMITED", "Active run quota reached; complete existing runs before starting more");
+    if (definition.tasks.length > budget.maxWorkflowTasks || definition.sources.length > budget.maxWorkflowSources || definition.policyRules.length > budget.maxWorkflowRules) throw new HttpError("VALIDATION", "Workflow exceeds controller complexity limits");
     const launcher = this.assertRuntime();
     if (!this.d.providerConnections) {
       const [assigned] = await this.d.db.select().from(schema.workflowModels).where(and(eq(schema.workflowModels.workflowId, workflow.id), eq(schema.workflowModels.version, workflow.version)));
@@ -147,7 +170,7 @@ export class RunService {
       const s = await this.d.journal.snapshot(runId);
       if (s && s.run.status !== "FAILED")
         await this.d.journal.append(runId, [
-          { runId, traceId, type: "run.status_changed", payload: { from: s.run.status, to: "FAILED", reason: `launch failed: ${String(err)}`.slice(0, 500) } },
+          { runId, traceId, type: "run.status_changed", payload: { from: s.run.status, to: "FAILED", reason: "Run launch failed; inspect the private controller logs" } },
         ]);
     });
     return runId;

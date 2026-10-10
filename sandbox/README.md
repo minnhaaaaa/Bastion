@@ -1,3 +1,5 @@
+> Current deployment requirements and restrictions are in [Security hardening](../docs/SECURITY_HARDENING.md). Production baseline execution is disabled; earlier baseline notes below describe historical experiments and automated tests. The live suite now verifies production baseline rejection.
+
 # Person 2 runtime and sandbox handoff
 
 The runtime, scheduler, gateway and workflow runner implement the frozen interfaces in `packages/contracts`. They use the journal and artifact broker supplied by Person 3. No workflow definitions or attack content are shipped with these modules.

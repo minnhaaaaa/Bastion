@@ -14,6 +14,7 @@ export const RepositorySelection = z.object({ directory: z.string().trim().min(1
 export const RepositoryAccess = z.object({ directory: z.string(), permissions: z.array(Permission), sources: z.array(SourceDefinition), policyRules: z.array(PolicyRule), connectedAt: z.string().datetime() });
 export type RepositoryAccess = z.infer<typeof RepositoryAccess>;
 export type RepositoryConnector = (selection: z.infer<typeof RepositorySelection>) => Promise<RepositoryAccess>;
+export const escapesRoot = (suffix: string) => suffix === ".." || /^\.\.[\\/]/.test(suffix) || isAbsolute(suffix);
 
 /** Enumerates tracked regular files only. No checkout, hooks, filters, network or shell. */
 export function repositoryConnector(config: { hostRoot: string; workerRoot: string; gitExecutable: string; timeoutMs: number; maxBytes: number; toolOperations: Record<string, string> }): RepositoryConnector {
@@ -24,7 +25,7 @@ export function repositoryConnector(config: { hostRoot: string; workerRoot: stri
     const root = await realpath(config.hostRoot);
     const confined = (path: string) => {
       const suffix = relative(root, path);
-      if (suffix === ".." || suffix.startsWith("../") || isAbsolute(suffix)) throw new Error("Repository escapes the sandbox");
+      if (escapesRoot(suffix)) throw new Error("Repository escapes the sandbox");
       return suffix;
     };
     const rel = posix.isAbsolute(selection.directory) ? posix.relative(config.workerRoot, selection.directory) : selection.directory;
@@ -42,7 +43,7 @@ export function repositoryConnector(config: { hostRoot: string; workerRoot: stri
     for (const file of [...new Set(files)]) {
       const path = resolve(directory, file);
       const within = relative(directory, path);
-      if (within === ".." || within.startsWith("../") || isAbsolute(within)) throw new Error("Invalid tracked path");
+      if (escapesRoot(within)) throw new Error("Invalid tracked path");
       const stat = await lstat(path);
       // Symlinks and submodules require separate explicit connections.
       if (!stat.isFile() || stat.isSymbolicLink()) continue;

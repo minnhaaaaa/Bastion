@@ -489,8 +489,9 @@ export class ArenaService {
       case "INSPECT_SOURCE": {
         const src = s.sources[cmd.sourceVersionId];
         if (!src) throw new Error("unknown source");
-        const data = { id: src.id, name: src.name, version: src.version, trust: src.trust, securityState: src.securityState, preview: src.preview };
-        await addEvidence([p.id], { id: src.id, kind: "source", summary: `${src.name} v${src.version} (${src.trust}): ${src.preview}`.slice(0, 280) });
+        const preview = src.classification === "PUBLIC" ? src.preview : "";
+        const data = { id: src.id, name: src.name, version: src.version, trust: src.trust, securityState: src.securityState, preview };
+        await addEvidence([p.id], { id: src.id, kind: "source", summary: `${src.name} v${src.version} (${src.trust}): ${preview}`.slice(0, 280) });
         return data;
       }
       case "TRACE_DEPENDENCY": {

@@ -1,6 +1,6 @@
 import { it, expect } from "vitest";
 import { resolve } from "node:path";
-import { DefaultResourceLoader, SessionManager, SettingsManager, createAgentSession } from "@mariozechner/pi-coding-agent";
+import { DefaultResourceLoader, SessionManager, SettingsManager, createAgentSession } from "@earendil-works/pi-coding-agent";
 import { piConfigFromEnv, piModelRegistry } from "./index";
 
 it.skipIf(process.env.BASTION_PROVIDER_HTTP_DIAGNOSTIC !== "enabled")("custom provider answers a bounded non-streaming HTTP probe", async () => {

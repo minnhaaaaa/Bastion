@@ -28,6 +28,17 @@ describe("workflow policy", () => {
     expect(matches("a.b", "axb")).toBe(false);
     expect(matches("/work/**", "/outside/work/a")).toBe(false);
   });
+  it("matches Windows file grants across separators without allowing a single-star directory escape", () => {
+    const { definition, request } = setup();
+    const root = `C:\\${crypto.randomUUID()}`;
+    definition.agents[0]!.capabilities = [`fs.read:${root}/**`];
+    definition.policyRules[0]!.resourcePattern = `${root}/**`;
+    const policy = new WorkflowPolicyEngine(definition);
+    expect(policy.evaluate({ ...request, resource: `${root.replaceAll("\\", "/")}/file` }).decision).toBe("ALLOW");
+    definition.agents[0]!.capabilities = [`fs.read:${root}/*`];
+    expect(new WorkflowPolicyEngine(definition).evaluate({ ...request, resource: `${root}\\nested\\file` }).decision).toBe("DENY");
+    expect(policy.evaluate({ ...request, resource: `C:/other/file` }).decision).toBe("DENY");
+  });
 });
 
 describe("gateway", () => {

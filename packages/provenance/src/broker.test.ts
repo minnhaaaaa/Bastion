@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { newId } from "@bastion/contracts";
@@ -20,6 +20,20 @@ afterEach(async () => {
 });
 
 describe("PgArtifactBroker", () => {
+  it("withholds inherited sensitive output and detects tampered blob contents", async () => {
+    const journal = new PgEventJournal(db);
+    const blobs = new FsBlobStore(dir);
+    const broker = new PgArtifactBroker(journal, new RunRepository(db), blobs);
+    const { runId, traceId, taskIds } = await seedRun(db, journal, { a: [] });
+    const source = await broker.ingestSource({ runId, traceId, name: crypto.randomUUID(), content: crypto.randomUUID(), trust: "UNTRUSTED", classification: "INTERNAL" });
+    const execution = newId("exec");
+    await setTaskState(journal, runId, taskIds.a!, execution, 1, "PENDING", "RUNNING");
+    await broker.consume({ runId, traceId, inputVersionId: source.id, consumerExecutionId: execution, consumerTaskId: taskIds.a! });
+    const output = await broker.publish({ runId, traceId, name: crypto.randomUUID(), content: "short sensitive value", classification: "PUBLIC", producerExecutionId: execution, producerTaskId: taskIds.a! });
+    expect(output).toMatchObject({ classification: "INTERNAL", preview: "" });
+    await writeFile(join(dir, output.blobRef.split(":").at(-1)!), crypto.randomUUID());
+    await expect(broker.content(runId, output.id)).rejects.toThrow("integrity");
+  });
   it("records observed provenance through ingest → consume → publish", async () => {
     const journal = new PgEventJournal(db);
     const broker = new PgArtifactBroker(journal, new RunRepository(db), new FsBlobStore(dir));

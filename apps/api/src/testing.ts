@@ -1,3 +1,4 @@
+import { testApiSecurity } from "../../../tests/security-settings";
 import { ProviderConnections } from "./provider-connections";
 /** Test-only harness: real server + PGlite + real services; runtime doubles are passed in by tests. */
 import { mkdtemp, rm } from "node:fs/promises";
@@ -12,7 +13,7 @@ import { newSecret } from "./auth";
 import { buildServer } from "./server";
 
 export async function createTestApp(
-  opts: { taskAttachments?: import("./task-attachments").TaskAttachmentStore; providerConfig?: { controller: import("@bastion/runtime-pi").PiConfig; key: string }; repositoryConnector?: import("./repository-access").RepositoryConnector; taskPlanner?: import("./task-planning").TaskPlanner; launcher?: RunLauncher; audit?: TargetAudit; briefingMs?: number; attackWindowMs?: number; reconnectGraceMs?: number; roomTtlMs?: number; joinRatePerMinute?: number; additionalOrigins?: string[] } = {},
+  opts: { taskAttachments?: import("./task-attachments").TaskAttachmentStore; providerConfig?: { controller: import("@bastion/runtime-pi").PiConfig; key: string }; repositoryConnector?: import("./repository-access").RepositoryConnector; taskPlanner?: import("./task-planning").TaskPlanner; launcher?: RunLauncher; audit?: TargetAudit; briefingMs?: number; attackWindowMs?: number; reconnectGraceMs?: number; roomTtlMs?: number; joinRatePerMinute?: number; additionalOrigins?: string[]; security?: Partial<import("./security-config").ApiSecurity>; baselineEnabled?: boolean } = {},
 ) {
   const { db, close } = await createTestDb();
   const dir = await mkdtemp(join(tmpdir(), "bastion-api-"));
@@ -29,6 +30,7 @@ export async function createTestApp(
   const userB = newId("user");
   const { app, io, arena } = await buildServer(
     {
+      baselineEnabled: opts.baselineEnabled ?? true,
       db,
       providerConnections,
       journal,
@@ -48,6 +50,7 @@ export async function createTestApp(
         [tokenB, userB],
       ]),
       config: {
+        security: { ...testApiSecurity, ...opts.security },
         roomTtlMs: opts.roomTtlMs ?? 600_000,
         briefingMs: opts.briefingMs ?? 60_000,
         attackWindowMs: opts.attackWindowMs ?? 60_000,

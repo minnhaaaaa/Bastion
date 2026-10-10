@@ -63,6 +63,7 @@ const { app } = await buildServer(
     graph,
     operators: env.OPERATOR_TOKENS,
     config: {
+      security: env.API_SECURITY_JSON,
       roomTtlMs: env.ROOM_TTL_SECONDS * 1000,
       briefingMs: env.ARENA_BRIEFING_SECONDS * 1000,
       attackWindowMs: env.ARENA_ATTACK_WINDOW_SECONDS * 1000,
@@ -91,4 +92,4 @@ const shutdown = async () => {
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 
-await app.listen({ port: env.API_PORT, host: "0.0.0.0" });
+await app.listen({ port: env.API_PORT, host: env.API_BIND_HOST });

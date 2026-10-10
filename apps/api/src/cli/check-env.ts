@@ -3,6 +3,7 @@ import { loadEnv } from "../env";
 import { piConfigFromEnv, piModelRegistry } from "@bastion/runtime-pi";
 import { sandboxConfigFromEnv } from "@bastion/security";
 import { schedulerParallelismFromEnv } from "@bastion/orchestrator";
+import { RuntimeSecurity, parseSecurityConfig } from "../security-config";
 
 try { process.loadEnvFile(new URL("../../../../.env", import.meta.url)); }
 catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
@@ -15,7 +16,7 @@ function present(keys: string[]) {
     else if (/<[^>]+>|YOUR_|CHANGE_THIS/.test(value)) issues.push(`${key}: contains a placeholder`);
   }
 }
-present(["POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB", "POSTGRES_PORT", "NEO4J_BOLT_PORT", "NEO4J_HTTP_PORT", "API_URL", "VITE_API_URL", "OPERATOR_TOKEN"]);
+present(["POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB", "POSTGRES_PORT", "POSTGRES_PUBLISH_HOST", "NEO4J_BOLT_PORT", "NEO4J_HTTP_PORT", "NEO4J_PUBLISH_HOST", "API_URL", "VITE_API_URL", "OPERATOR_TOKEN"]);
 try { loadEnv(env); } catch (error) { issues.push((error as Error).message); }
 for (const key of ["API_URL", "VITE_API_URL"]) {
   if (env[key]?.trim()) {
@@ -36,6 +37,7 @@ if (env.AGENT_RUNTIME === "enabled" || process.argv.includes("--runtime")) {
     ["Agent", () => piModelRegistry(piConfigFromEnv(env))],
     ["Sandbox", () => sandboxConfigFromEnv(env)],
     ["Scheduler", () => schedulerParallelismFromEnv(env)],
+    ["Runtime security", () => parseSecurityConfig(RuntimeSecurity, env.RUNTIME_SECURITY_JSON, "RUNTIME_SECURITY_JSON")],
   ] as const) {
     try { check(); } catch (error) {
       const message = error instanceof Error ? error.message : "";

@@ -69,7 +69,7 @@ export class PgToolApprovalStore implements ToolApprovalStore {
           actionDigest: record.actionDigest,
           expiresAt: record.expiresAt,
           operation: record.request.operation,
-          resourcePreview: resourcePreview(record.request),
+          resourcePreview: record.request.inputClassification === "PUBLIC" ? resourcePreview(record.request) : "",
         },
       },
     ]);

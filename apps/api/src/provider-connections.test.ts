@@ -1,3 +1,5 @@
+import { testApiSecurity } from "../../../tests/security-settings";
+import { ProjectRepository } from "@bastion/db";
 import { RunService, type AppDeps } from "./context";
 import { randomBytes, randomUUID } from "node:crypto";
 import { expect, it, vi } from "vitest";
@@ -59,7 +61,7 @@ it("pins different providers per agent, preserves boundaries and versions, and r
     const saved = await post("/api/workflows", { commandId: newId("command"), projectId: project.id, definition, agentConnections: { [agent.id]: second.id } });
     expect(saved.statusCode).toBe(201); const workflow = saved.json<Workflow>();
     expect(workflow.definition).toEqual(definition);
-    const unavailable = new RunService({ db: test.db, launcher } as unknown as AppDeps, test.app.log);
+    const unavailable = new RunService({ db: test.db, launcher, projects: new ProjectRepository(test.db), config: { security: testApiSecurity } } as unknown as AppDeps, test.app.log);
     await expect(unavailable.start(workflow, "PROTECTED", [])).rejects.toThrow("Restore provider connection storage");
     expect(launcher.launch).not.toHaveBeenCalled();
     expect((await service.forExecution(workflow, definition.agents[0]!.id)).provider).toBe("openai");

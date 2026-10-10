@@ -1,7 +1,9 @@
 import { injectionFindingRecorder } from "./injection-findings";
+import { createHash } from "node:crypto";
+import { RuntimeSecurity, assertModelBoundary, parseSecurityConfig } from "../security-config";
 import { taskAttachmentStore } from "../task-attachments";
 import { ProviderConnections } from "../provider-connections";
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne, inArray } from "drizzle-orm";
 import { schema } from "@bastion/db";
 import { repositoryConnector } from "../repository-access";
 import { createTaskPlanner } from "../task-planning";
@@ -54,7 +56,9 @@ export function buildAgentRuntime(input: {
   createAgent?: (context: ExecutionContext, gateway: ToolGateway, tools: GatewayTool[]) => AgentRuntimeAdapter;
 }) {
   const { env, journal, broker, workflows } = input;
+  const security = parseSecurityConfig(RuntimeSecurity, env.RUNTIME_SECURITY_JSON, "RUNTIME_SECURITY_JSON");
   const pi = piConfigFromEnv(env);
+  assertModelBoundary(security, pi.baseUrl, []);
   if (!input.createAgent) piModelRegistry(pi);
   const providerConnections = env.PROVIDER_CREDENTIAL_KEY ? new ProviderConnections(input.db, pi, env.PROVIDER_CREDENTIAL_KEY) : undefined;
   const sandbox = sandboxConfigFromEnv(env);
@@ -94,16 +98,56 @@ export function buildAgentRuntime(input: {
     const task = ex ? s.tasks[ex.taskId] : undefined;
     if (!ex || !task || ex.taskId !== call.taskId || task.agentId !== call.agentId) throw new Error("Tool call identity does not match a scheduled execution");
     const inputVersionIds = s.edges.filter((e) => e.relation === "CONSUMED" && e.toId === ex.id).map((e) => e.fromId);
-    const inputClassification = inputVersionIds
-      .map((id) => (s.sources[id] ?? s.artifacts[id])!.classification)
+    const inputClassification = [...inputVersionIds.map((id) => (s.sources[id] ?? s.artifacts[id])!.classification),
+      ...Object.values(s.toolRequests).filter(request => request.executionId === ex.id && request.executionOutcome === "SUCCESS")
+        .map(request => security.toolOutputClassifications[request.operation]).filter((value): value is Classification => value !== undefined)]
       .reduce<Classification>((a, b) => (RANK[b] > RANK[a] ? b : a), "PUBLIC");
+    const definition = await definitionFor(call.runId);
+    const workflowPolicy = new WorkflowPolicyEngine(definition);
+    const normalized = await client.normalize(call);
+    let classifiedRead = normalized.operation !== "fs.read";
+    if (!classifiedRead) {
+      for (const id of inputVersionIds) {
+        const source = s.sources[id];
+        const spec = source && definition.sources.find(value => value.name === source.name);
+        if (!spec || /^https?:\/\//i.test(spec.location)) continue;
+        const resource = await client.normalize({ ...call, tool: call.tool, args: { path: spec.location } });
+        if (resource.resource === normalized.resource) classifiedRead = true;
+      }
+    }
     return {
-      policy: new WorkflowPolicyEngine(await definitionFor(call.runId)),
+      policy: { evaluate: request => {
+        if (!classifiedRead) return { decision: "DENY", ruleId: "classification.denied", reason: "File reads require a declared, consumed source version" };
+        if (!(security.operationClassifications[request.operation] ?? []).includes(request.inputClassification)) return { decision: "DENY", ruleId: "classification.denied", reason: "Input classification is not approved for this operation" };
+        const outputClass = security.toolOutputClassifications[request.operation];
+        if (!outputClass || !security.modelClassifications.includes(outputClass)) return { decision: "DENY", ruleId: "classification.denied", reason: "Tool result classification is not approved for model disclosure" };
+        const decision = workflowPolicy.evaluate(request);
+        return decision.decision === "ALLOW" && security.approvalOperations.includes(request.operation)
+          ? { decision: "REQUIRE_APPROVAL", ruleId: decision.ruleId, reason: "Controller configuration requires review of this exact operation" }
+          : decision;
+      } },
       inputClassification,
       inputVersionIds,
       active: ex.state === "RUNNING",
       mode: s.run.mode,
     };
+  };
+
+  const execute = async (call: Parameters<ToolGateway["dispatch"]>[0], request: import("@bastion/contracts").PolicyRequest) => {
+    const output = await client.execute(call, request);
+    if (request.operation === "fs.read") {
+      const s = await snapshot(call.runId);
+      const definition = await definitionFor(call.runId);
+      let expectedHash: string | undefined;
+      for (const id of request.inputVersionIds) {
+        const source = s.sources[id];
+        const spec = source && definition.sources.find(value => value.name === source.name);
+        if (!spec || /^https?:\/\//i.test(spec.location)) continue;
+        if ((await client.normalize({ ...call, args: { path: spec.location } })).resource === request.resource) expectedHash = source!.contentHash;
+      }
+      if (typeof output !== "string" || !expectedHash || `sha256:${createHash("sha256").update(output).digest("hex")}` !== expectedHash) throw new Error("File contents no longer match the consumed source version");
+    }
+    return output;
   };
 
   // Tool approvals (CONTRACT_PROPOSAL B3): durable store, executor, and the waiter agents block on.
@@ -128,7 +172,7 @@ export function buildAgentRuntime(input: {
     },
     context,
     normalize: (call) => client.normalize(call),
-    execute: (call, req) => client.execute(call, req),
+    execute,
     withExecutionFence: (call, op) => fence.run(call.executionId, op),
   });
 
@@ -137,7 +181,7 @@ export function buildAgentRuntime(input: {
     broker,
     context,
     normalize: (call) => client.normalize(call),
-    execute: (call, req) => client.execute(call, req),
+    execute,
     approvals: approvalService,
     withExecutionFence: (call, dispatch) => fence.run(call.executionId, dispatch),
   });
@@ -150,6 +194,10 @@ export function buildAgentRuntime(input: {
     journal,
     broker,
     parallelism,
+    outputClassification: async context => [...context.inputs.map(value => value.classification),
+      ...Object.values((await snapshot(context.runId)).toolRequests).filter(request => request.executionId === context.executionId && request.executionOutcome === "SUCCESS")
+        .map(request => security.toolOutputClassifications[request.operation]).filter((value): value is Classification => value !== undefined)]
+      .reduce<Classification>((a, b) => RANK[b] > RANK[a] ? b : a, "PUBLIC"),
     workflowForRun: definitionFor,
     workspaceForRun: async () => sandbox.workerRoot,
     withExecutionFence: (id, op) => fence.run(id, op),
@@ -174,6 +222,7 @@ export function buildAgentRuntime(input: {
         if (assigned && Object.keys(assigned.bindings).length) throw new Error("Provider connection storage is required for this workflow");
       }
       const config = providerConnections ? await providerConnections.forExecution(workflow, context.task.agentId) : pi;
+      assertModelBoundary(security, config.baseUrl, inputs.map(value => value.classification));
       return input.createAgent ? input.createAgent(enriched, gateway, tools) : piRuntimeForExecution({ context: enriched, cwd: sandbox.hostRoot, config, tools, gateway, reportFinding: reportFinding({ runId: context.runId, executionId: context.executionId, traceId: context.traceId, taskId: context.task.id, agentId: context.task.agentId, inputVersionIds: context.inputVersionIds }) });
     },
   });
@@ -192,11 +241,22 @@ export function buildAgentRuntime(input: {
     verify: async (s) => verifyRun(s, audit, { definition: await definitionFor(s.run.id), journal, content: (r, v) => broker.content(r, v) }),
   });
 
+  let workspaceRun: string | undefined;
+  journal.onCommitted(event => {
+    if (event.type === "run.status_changed" && ["COMPLETED", "FAILED", "RECOVERED", "RECOVERY_FAILED"].includes(event.payload.to) && workspaceRun === event.runId) workspaceRun = undefined;
+  });
   const launcher: RunLauncher = {
     async launch({ runId, attackPayloadIds }) {
-      await runner.prepare(runId);
-      for (const id of attackPayloadIds) await runner.applyAttack(runId, id);
-      await runner.start(runId);
+      if ((await snapshot(runId)).run.mode === "BASELINE" && !input.createAgent) throw new Error("Baseline is disabled for production model execution");
+      if (workspaceRun && workspaceRun !== runId) throw new Error("The shared workspace is reserved by another run; finish recovery before starting another");
+      workspaceRun = runId;
+      try {
+        const otherRuns = await input.db.select({ id: schema.runs.id }).from(schema.runs).where(and(ne(schema.runs.id, runId), inArray(schema.runs.status, ["RUNNING", "CONTAINED", "RECOVERING"]))).limit(1);
+        if (otherRuns.length) throw new Error("Another run still owns the shared workspace");
+        await runner.prepare(runId);
+        for (const id of attackPayloadIds) await runner.applyAttack(runId, id);
+        await runner.start(runId);
+      } catch (error) { if (workspaceRun === runId) workspaceRun = undefined; throw error; }
     },
   };
 
@@ -204,5 +264,11 @@ export function buildAgentRuntime(input: {
     verify: async (runId) => verifyRun(await snapshot(runId), audit, { definition: await definitionFor(runId), journal, content: (r, v) => broker.content(r, v) }),
   };
 
-  return { taskAttachments: taskAttachmentStore({ hostRoot: sandbox.hostRoot, workerRoot: sandbox.workerRoot, maxBytes }), providerConnections, repositoryConnector: env.REPOSITORY_GIT_EXECUTABLE ? repositoryConnector({ hostRoot: sandbox.hostRoot, workerRoot: sandbox.workerRoot, gitExecutable: env.REPOSITORY_GIT_EXECUTABLE, timeoutMs: sandbox.timeoutMs, maxBytes, toolOperations: sandbox.toolOperations }) : undefined, taskPlanner: createTaskPlanner(pi, sandbox.hostRoot), launcher, scheduler, verifier, audit, fence, gateway, toolApprovals, info: { provider: pi.provider, model: pi.model, timeoutMs: pi.timeoutMs } };
+  const planner = createTaskPlanner(pi, sandbox.hostRoot);
+  const taskPlanner: typeof planner = async (...args) => {
+    const [, base, repository, followUp, selectedConfig, documentNames] = args;
+    assertModelBoundary(security, (selectedConfig ?? pi).baseUrl, [...(base?.definition.sources.map(source => source.classification) ?? []), ...(repository || followUp || documentNames?.length ? ["INTERNAL"] : [])]);
+    return planner(...args);
+  };
+  return { taskAttachments: taskAttachmentStore({ hostRoot: sandbox.hostRoot, workerRoot: sandbox.workerRoot, maxBytes }), providerConnections, repositoryConnector: env.REPOSITORY_GIT_EXECUTABLE ? repositoryConnector({ hostRoot: sandbox.hostRoot, workerRoot: sandbox.workerRoot, gitExecutable: env.REPOSITORY_GIT_EXECUTABLE, timeoutMs: sandbox.timeoutMs, maxBytes, toolOperations: sandbox.toolOperations }) : undefined, taskPlanner, launcher, scheduler, verifier, audit, fence, gateway, toolApprovals, info: { provider: pi.provider, model: pi.model, timeoutMs: pi.timeoutMs } };
 }

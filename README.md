@@ -8,6 +8,7 @@ An agent workspace with security built in. A security-native multi-agent orchest
 - Stack: [TECH_STACK.md](TECH_STACK.md)
 - **Who does what + shared contracts: [TEAM_PLAN.md](TEAM_PLAN.md)**
 - Security architecture: [below](#security-architecture) · acceptance tests: [ACCEPTANCE.md](ACCEPTANCE.md)
+- Current enforcement and required security configuration: [Security hardening](docs/SECURITY_HARDENING.md).
 
 > **Zero hardcoded data.** No mock events, fixtures, sample runs, hardcoded workflows or default config in code.
 > Workflows are submitted through the API and stored in Postgres; config comes from `.env`; everything is real-time.
@@ -166,7 +167,7 @@ flowchart LR
 - **Prompt-injection detection is heuristic.** The guarantee is that injected instructions cannot make a *mediated* tool call do anything the policy denies.
 - **Out of scope:** sandbox container escape, attacks on model weights, and tool calls that bypass the gateway.
 - **Verified:** sandbox network isolation (`tests/sandbox.docker.test.ts`) and the deny/quarantine/recovery path end to end (`apps/api/src/runtime/runtime.e2e.test.ts`). See [ACCEPTANCE.md](ACCEPTANCE.md).
-- **Not yet verified:** runs with a real LLM provider. `TOOL` acceptance checks fail closed until the scheduler runs them inside the verifier task.
+- **Live-model evidence:** bounded historical observations and incomplete deployment checks are recorded in [LIVE_VALIDATION.md](LIVE_VALIDATION.md). They do not establish universal protection or validate every subsequent revision. Controller-owned `TOOL` checks run through the gateway inside the verifier task.
 
 ## Quickstart
 

@@ -75,7 +75,7 @@ export class PgArtifactBroker implements ArtifactBroker {
       trust: input.trust,
       classification: input.classification,
       blobRef,
-      preview: redactPreview(input.content),
+      preview: input.classification === "PUBLIC" ? redactPreview(input.content) : "",
     };
     await this.journal.append(input.runId, [
       previous
@@ -132,7 +132,7 @@ export class PgArtifactBroker implements ArtifactBroker {
           classification,
           trustState: "CLEAR",
           blobRef,
-          preview: redactPreview(input.content),
+          preview: classification === "PUBLIC" ? redactPreview(input.content) : "",
         },
       },
     ]);

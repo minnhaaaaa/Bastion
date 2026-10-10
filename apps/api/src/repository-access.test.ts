@@ -14,14 +14,15 @@ afterEach(async () => { for (const close of cleanup.splice(0)) await close(); })
 async function setup() {
   const root = await mkdtemp(join(tmpdir(), "bastion-repository-")); cleanup.push(() => rm(root, { recursive: true, force: true }));
   const repo = join(root, "repo"); await mkdir(repo);
-  const git = (args: string[]) => promisify(execFile)("/usr/bin/git", ["-C", repo, ...args]);
+  const gitExecutable = (await promisify(execFile)(process.platform === "win32" ? "where.exe" : "which", ["git"])).stdout.trim().split(/\r?\n/)[0]!;
+  const git = (args: string[]) => promisify(execFile)(gitExecutable, ["-C", repo, ...args]);
   await git(["init"]);
   const name = `${crypto.randomUUID()}.txt`;
   await writeFile(join(repo, name), crypto.randomUUID());
   await writeFile(join(repo, ".env"), crypto.randomUUID());
-  await symlink("/etc/passwd", join(repo, "link"));
-  await git(["add", name, "link"]);
-  const config = { hostRoot: root, workerRoot: "/workspace", gitExecutable: "/usr/bin/git", timeoutMs: 10000, maxBytes: 100000, toolOperations: { read: "fs.read", write: "fs.write" } };
+  if (process.platform !== "win32") await symlink("/etc/passwd", join(repo, "link"));
+  await git(["add", name, ...(process.platform === "win32" ? [] : ["link"])]);
+  const config = { hostRoot: root, workerRoot: "/workspace", gitExecutable, timeoutMs: 10000, maxBytes: 100000, toolOperations: { read: "fs.read", write: "fs.write" } };
   return { root, repo, name, connect: repositoryConnector(config), config, selection: { directory: "repo", permissions: [{ operation: "fs.read" as const, decision: "ALLOW" as const }, { operation: "fs.write" as const, decision: "REQUIRE_APPROVAL" as const }] } };
 }
 it("connects only tracked regular files, compiles exact grants, and refuses escapes or unreviewed edits", async () => {

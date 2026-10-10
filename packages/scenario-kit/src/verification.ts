@@ -41,7 +41,7 @@ export async function verifySelectedClaims(input: {
       if (supported && !(await input.readVersion(id)).includes(claim.text)) supported = false;
     }
     if (!supported) {
-      const preview = input.preview(claim.text);
+      const preview = artifact.classification === "PUBLIC" ? input.preview(claim.text) : "";
       if (preview.length > 280) throw new Error("Claim preview exceeds contract limit");
       await input.journal.append(s.run.id, [{ runId: s.run.id, traceId: newId("trace"), type: "claim.unverified", payload: { artifactVersionId: artifact.id, claim: preview, reason: "Selected quotation lacks trusted observed source support" } }]);
     }

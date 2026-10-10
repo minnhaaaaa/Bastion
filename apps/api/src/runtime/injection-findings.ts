@@ -28,7 +28,7 @@ export function injectionFindingRecorder(journal: EventJournal & { snapshot(runI
       const digest = createHash("sha256").update(finding.evidence).digest("hex");
       await journal.append(identity.runId, [{ runId: identity.runId, traceId: identity.traceId, taskId: identity.taskId, agentId: identity.agentId, type: "incident.opened", payload: {
         incidentId, sourceVersionId: source.id, severity: finding.severity, triggerToolRequestId: null,
-        reason: `Model-reported prompt injection: ${redactPreview(finding.reason)} (evidence SHA-256: ${digest}; execution: ${execution.id}). Requires review; no tool denial implied.`,
+        reason: `Model-reported prompt injection: ${source.classification === "PUBLIC" ? redactPreview(finding.reason) : "Non-public source; assessment text withheld"} (evidence SHA-256: ${digest}; execution: ${execution.id}). Requires review; no tool denial implied.`,
       } }]);
       return { incidentId, sourceVersionId: source.id, state: "OPEN" };
     });

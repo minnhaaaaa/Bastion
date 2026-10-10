@@ -39,6 +39,18 @@ it("rejects unobserved or quarantined evidence without reading it", async () => 
   await expect(verifySelectedClaims({ ...s, claims: [{ artifactVersionId: newId("artifact"), text: "quote", sourceVersionIds: [] }], readVersion, preview: () => "" })).rejects.toThrow("owned");
 });
 
+it("never journals a non-public unsupported quotation, even with an unsafe preview callback", async () => {
+  const s = await setup();
+  s.snapshot.artifacts[s.artifactId]!.classification = "INTERNAL";
+  const value = crypto.randomUUID();
+  const preview = vi.fn((text: string) => text);
+  await verifySelectedClaims({ ...s, claims: [{ artifactVersionId: s.artifactId, text: value, sourceVersionIds: [] }], readVersion: async () => value, preview });
+  expect(preview).not.toHaveBeenCalled();
+  const events = s.journal.events.filter(event => event.type === "claim.unverified");
+  expect(events[0]!.payload.claim).toBe("");
+  expect(JSON.stringify(events)).not.toContain(value);
+});
+
 it("routes acceptance commands through the gateway and fails pending or denied checks", async () => {
   const s = await setup();
   const call: ToolCall = { runId: s.runId, taskId: s.taskId, executionId: s.executionId, agentId: s.agentId, traceId: s.traceId, tool: crypto.randomUUID(), args: { executable: crypto.randomUUID(), argv: [] } };

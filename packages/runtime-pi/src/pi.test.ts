@@ -1,6 +1,6 @@
 import { expect, it, vi } from "vitest";
 import { Type } from "@sinclair/typebox";
-import { AuthStorage, DefaultResourceLoader, ModelRegistry, SessionManager, SettingsManager, createAgentSession } from "@mariozechner/pi-coding-agent";
+import { AuthStorage, DefaultResourceLoader, ModelRegistry, SessionManager, SettingsManager, createAgentSession } from "@earendil-works/pi-coding-agent";
 import { newId } from "@bastion/contracts";
 import { gatewayTools, piConfigFromEnv, PiRuntimeAdapter } from "./index";
 

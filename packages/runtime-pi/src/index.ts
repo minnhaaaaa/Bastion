@@ -8,8 +8,8 @@ import { providerFailureCode } from "./provider-failure";
  * Pi-backed AgentRuntimeAdapter. All file/network/process tools must route through ToolGateway.
  * See TEAM_PLAN.md and packages/contracts/src/ports.ts.
  */
-import { AuthStorage, DefaultResourceLoader, ModelRegistry, SessionManager, SettingsManager, createAgentSession } from "@mariozechner/pi-coding-agent";
-import type { AgentSession, ToolDefinition } from "@mariozechner/pi-coding-agent";
+import { AuthStorage, DefaultResourceLoader, ModelRegistry, SessionManager, SettingsManager, createAgentSession } from "@earendil-works/pi-coding-agent";
+import type { AgentSession, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { TSchema } from "@sinclair/typebox";
 import type { AgentRunRequest, AgentRuntimeAdapter, RuntimeEvent, ToolCall, ToolGateway } from "@bastion/contracts";
 import { existsSync } from "node:fs";
@@ -83,7 +83,7 @@ export function piModelRegistry(config: PiConfig) {
     const metadata = customModelFromEnv(JSON.stringify(config.customModel));
     // The SDK requires an API-key reference to register a provider. The explicitly supplied
     // in-memory runtime key takes precedence; never register raw secrets as shell resolvers.
-    modelRegistry.registerProvider(config.provider, { baseUrl: config.baseUrl, api: metadata.api, apiKey: "PI_API_KEY", models: [{ ...metadata, id: config.model, name: config.model }] });
+    modelRegistry.registerProvider(config.provider, { baseUrl: config.baseUrl, api: metadata.api, apiKey: "$PI_API_KEY", models: [{ ...metadata, id: config.model, name: config.model }] });
   }
   const model = modelRegistry.find(config.provider, config.model);
   if (!model) throw new Error("Configured Pi model does not exist; run pnpm agent:models");

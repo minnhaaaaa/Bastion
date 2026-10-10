@@ -1,5 +1,5 @@
 import { Type } from "@sinclair/typebox";
-import type { ToolDefinition } from "@mariozechner/pi-coding-agent";
+import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 
 export type InjectionFinding = { sourceVersionId: string; evidence: string; reason: string; severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" };
 export type FindingReceipt = { incidentId: string; sourceVersionId: string; state: string };
