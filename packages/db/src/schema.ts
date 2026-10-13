@@ -340,3 +340,16 @@ export const arenaActions = pgTable(
   },
   (t) => [uniqueIndex("arena_actions_command_uq").on(t.commandId)],
 );
+
+/** OAuth credentials are controller-only and never part of run snapshots. */
+export const githubConnections = pgTable("github_connections", {
+  ownerId: text("owner_id").primaryKey(), accountId: text("account_id").notNull(), login: text("login").notNull(),
+  scopes: text("scopes").notNull(), credential: text("credential").notNull(), connectedAt: ts("connected_at").notNull(),
+});
+
+export const runPullRequests = pgTable("run_pull_requests", {
+  requested: boolean("requested").notNull().default(false),
+  runId: text("run_id").primaryKey().references(() => runs.id),
+  repository: jsonb("repository").notNull(), status: text("status").notNull(),
+  url: text("url"), message: text("message"), commitSha: text("commit_sha"), updatedAt: ts("updated_at").notNull().defaultNow(),
+});

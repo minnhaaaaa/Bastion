@@ -1,0 +1,1 @@
+CREATE TABLE "run_pull_requests" ("run_id" text PRIMARY KEY NOT NULL REFERENCES "runs"("id"), "repository" jsonb NOT NULL, "status" text NOT NULL, "url" text, "message" text, "commit_sha" text, "updated_at" timestamp with time zone NOT NULL DEFAULT now());

@@ -1,3 +1,4 @@
+import { githubRoutes } from "./routes/github";
 import { providerRoutes } from "./routes/providers";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
@@ -44,6 +45,7 @@ export async function buildServer(deps: AppDeps, opts: { webOrigin: string; addi
 
   coreRoutes(app, deps, { auth, access, idem, runs });
   providerRoutes(app, deps, { auth, access });
+  githubRoutes(app, deps, auth);
   arenaRoutes(app, deps, { auth, access, idem, arena });
 
   const io = new Server<ClientToServerEvents, ServerToClientEvents, Record<string, never>, { actor: Actor }>(app.server, {

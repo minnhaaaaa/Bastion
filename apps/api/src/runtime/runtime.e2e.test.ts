@@ -20,6 +20,7 @@ import { RecoveryManager } from "@bastion/recovery";
 import { buildServer } from "../server";
 import { newSecret } from "../auth";
 import { buildAgentRuntime } from "./index";
+import { injectionFindingRecorder } from "./injection-findings";
 import { reconcileOnBoot } from "../reconcile";
 
 const cleanups: (() => Promise<void>)[] = [];
@@ -52,7 +53,7 @@ async function startWorker(env: Record<string, string>) {
 }
 
 /** Scripted agent: reads inputs, obeys FETCH lines via the gateway, passes content downstream. */
-function scriptedAgent(context: Parameters<NonNullable<Parameters<typeof buildAgentRuntime>[0]["createAgent"]>>[0], gateway: Parameters<NonNullable<Parameters<typeof buildAgentRuntime>[0]["createAgent"]>>[1], httpTool: string): AgentRuntimeAdapter {
+function scriptedAgent(context: Parameters<NonNullable<Parameters<typeof buildAgentRuntime>[0]["createAgent"]>>[0], gateway: Parameters<NonNullable<Parameters<typeof buildAgentRuntime>[0]["createAgent"]>>[1], httpTool: string, report: () => Promise<void>): AgentRuntimeAdapter {
   // Model context must retain the persisted identity and trust of every consumed input.
   context.inputs.forEach((value, index) => {
     expect(value).toEqual(expect.objectContaining({ versionId: context.inputVersionIds[index], name: expect.any(String), kind: expect.stringMatching(/^(source|artifact)$/), securityState: expect.any(String) }));
@@ -65,6 +66,7 @@ function scriptedAgent(context: Parameters<NonNullable<Parameters<typeof buildAg
     subscribe(sessionId, sink) {
       sinks.set(sessionId, sink);
       queueMicrotask(async () => {
+        await report();
         const text = context.inputs.map((i) => (typeof i.content === "string" ? i.content : new TextDecoder().decode(i.content))).join("\n");
         for (const [, url] of text.matchAll(/FETCH (\S+)/g)) {
           await gateway.dispatch({ runId: context.runId, taskId: context.task.id, agentId: context.task.agentId, executionId: context.executionId, traceId: context.traceId, tool: httpTool, args: { url } });
@@ -139,7 +141,17 @@ async function setup(card: AttackCard = "POISON_DOCUMENT", opts: { toolCheck?: "
       TOOL_APPROVAL_TTL_SECONDS: String(opts.approvalTtlSeconds ?? 60),
   };
   const blobDir = join(dir, "blobs");
-  const createAgent: NonNullable<Parameters<typeof buildAgentRuntime>[0]["createAgent"]> = (ctx, gateway) => scriptedAgent(ctx, gateway, httpTool);
+  const findings = injectionFindingRecorder(journal, (runId, versionId) => broker.content(runId, versionId));
+  const createAgent: NonNullable<Parameters<typeof buildAgentRuntime>[0]["createAgent"]> = (ctx, gateway) => scriptedAgent(ctx, gateway, httpTool, async () => {
+    const snapshot = (await journal.snapshot(ctx.runId))!;
+    for (const [index, input] of ctx.inputs.entries()) {
+      const source = snapshot.sources[ctx.inputVersionIds[index]!];
+      if (!source) continue;
+      const text = typeof input.content === "string" ? input.content : new TextDecoder().decode(input.content);
+      const evidence = text.match(/FETCH \S+/)?.[0];
+      if (source.trust === "UNTRUSTED" && evidence) await findings({ runId: ctx.runId, executionId: ctx.executionId, taskId: ctx.task.id, agentId: ctx.task.agentId, traceId: ctx.traceId, inputVersionIds: ctx.inputVersionIds })({ sourceVersionId: source.id, evidence, reason: "Source instructs a request to an injected destination", severity: "HIGH" });
+    }
+  });
   const runtime = buildAgentRuntime({ env: runtimeEnv, db, journal, broker, workflows, createAgent });
   cleanups.push(async () => runtime.toolApprovals.stop());
   const recovery = new RecoveryManager({ journal, locate: runs, workflows, scheduler: runtime.scheduler, verifier: runtime.verifier, fence: runtime.fence, approvalTtlMs: 60_000 });
@@ -253,7 +265,7 @@ describe("agent runtime wired to journal/broker/recovery/API", () => {
     expect(await readFile(t.auditFile, "utf8")).toBe("");
     expect(await t.runtime.audit.unsafeAccessCount(runId)).toBe(0);
 
-    // Auto-incident traced to the poisoned version.
+    // Evidence-backed model report traced to the poisoned version.
     const incident = Object.values(s.incidents).find((i) => i.sourceVersionId === poisoned.id)!;
     expect(incident.state).toBe("OPEN");
 
@@ -410,6 +422,14 @@ describe("tool approvals (REQUIRE_APPROVAL) end to end", () => {
     expect(s.toolApprovals[a.id]!.status).toBe("CONSUMED");
     expect(s.toolRequests[a.toolRequestId]).toMatchObject({ decision: "ALLOW", executionOutcome: "SUCCESS" });
     expect(latestExecution(s, t.ids.tU)!.state).toBe("SUCCEEDED");
+    expect(await t.runtime.audit.unsafeAccessCount(runId)).toBe(0);
+    // A consumed approval is valid only for the exact recorded action, never a different target.
+    const entries = (await readFile(t.auditFile, "utf8")).trim().split("\n").filter(Boolean).map(line => JSON.parse(line));
+    const approvedAccess = entries.find(entry => entry.toolRequestId === a.toolRequestId);
+    expect(approvedAccess).toBeDefined();
+    entries.push({ ...approvedAccess, resource: `${approvedAccess.resource}/different-target` });
+    await writeFile(t.auditFile, entries.map(entry => JSON.stringify(entry)).join("\n") + "\n");
+    expect(await t.runtime.audit.unsafeAccessCount(runId)).toBe(1);
   }, 30_000);
 
   it("concurrent approvals of the same request execute exactly once (Postgres CAS)", async () => {

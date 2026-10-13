@@ -71,3 +71,30 @@ it("fails closed when the trusted verifier throws", async () => {
   await expect(s.runner.start(s.run.id)).rejects.toThrow("Workflow start failed");
   expect(replay(await s.journal.read(s.run.id)).run.status).toBe("FAILED");
 });
+
+
+it("does not finalize in the quarantine-before-hold window", async () => {
+  const s = await setup();
+  s.start.mockImplementation(async () => {
+    const sourceId = newId("source"), traceId = newId("trace"), incidentId = newId("incident");
+    await s.journal.append(s.run.id, [
+      { runId: s.run.id, traceId, type: "source.ingested", payload: { sourceVersionId: sourceId, name: "input", version: 1, contentHash: "hash", trust: "UNTRUSTED", classification: "PUBLIC", blobRef: "blob", preview: "" } },
+      { runId: s.run.id, traceId, type: "source.security_state_changed", payload: { sourceVersionId: sourceId, from: "CLEAR", to: "QUARANTINED", incidentId } },
+    ]);
+  });
+  expect(await s.runner.start(s.run.id)).toEqual([]);
+  expect(s.verify).not.toHaveBeenCalled();
+  expect(s.journal.events.some(e => e.type === "verification.completed")).toBe(false);
+  expect(s.journal.events.some(e => e.type === "run.status_changed" && e.payload.to === "FAILED")).toBe(false);
+});
+
+it("does not overwrite containment that occurs while verification is awaiting", async () => {
+  const s = await setup();
+  s.verify.mockImplementation(async () => {
+    await s.journal.append(s.run.id, [{ runId: s.run.id, traceId: newId("trace"), type: "run.status_changed", payload: { from: "RUNNING", to: "CONTAINED" } }]);
+    return [{ name: crypto.randomUUID(), passed: true }];
+  });
+  expect(await s.runner.start(s.run.id)).toEqual([]);
+  expect(replay(await s.journal.read(s.run.id)).run.status).toBe("CONTAINED");
+  expect(s.journal.events.some(e => e.type === "verification.completed")).toBe(false);
+});

@@ -49,6 +49,12 @@ export class PgEventJournal implements EventJournal {
           seq: (next?.lastSeq ?? 0) + 1,
           timestamp: new Date().toISOString(),
         });
+        // Normal finalization must not overwrite concurrent containment. Check under
+        // the journal's per-run lock so a stale snapshot cannot race this decision.
+        if (full.type === "run.status_changed" && full.payload.from === "RUNNING" && ["COMPLETED", "FAILED"].includes(full.payload.to) && next &&
+          (next.run.status !== "RUNNING" || Object.values(next.sources).some(source => source.securityState === "QUARANTINED"))) {
+          throw new Error("Run finalization superseded by a lifecycle or source security change");
+        }
         next = applyEvent(next, full);
         out.push(full);
       }

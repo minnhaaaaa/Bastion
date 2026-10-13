@@ -77,7 +77,7 @@ it("concurrent requests cannot borrow another operator's in-flight plan", async 
     expect((await first).statusCode).toBe(200);
   } finally { release(); await test.close(); }
 });
-it.each([["PROVIDER_RATE_LIMITED", "provider has reached its usage limit"], ["TIMEOUT", "provider did not respond before the deadline"]])("provider failure %s reaches the caller with an actionable message", async (code, message) => {
+it.each([["PROVIDER_RATE_LIMITED", "provider has reached its usage limit"], ["TIMEOUT", "provider did not respond before the deadline"], ["PROVIDER_AUTH_FAILED", "rejected its credentials"], ["ERROR", "did not complete the planning request"]])("provider failure %s reaches the caller with an actionable message", async (code, message) => {
   const { PiRuntimeAdapter } = await import("@bastion/runtime-pi");
   const { createTaskPlanner } = await import("./task-planning");
   const start = vi.spyOn(PiRuntimeAdapter.prototype, "startTask").mockResolvedValue({ sessionId: crypto.randomUUID() });
@@ -85,6 +85,7 @@ it.each([["PROVIDER_RATE_LIMITED", "provider has reached its usage limit"], ["TI
   try {
     const planner = createTaskPlanner({ authMode: "api-key", apiKey: crypto.randomUUID(), provider: crypto.randomUUID(), model: crypto.randomUUID(), baseUrl: "https://test.invalid", agentDir: process.cwd(), timeoutMs: 1000 }, process.cwd());
     await expect(planner(crypto.randomUUID())).rejects.toThrow(message);
+    expect(start).toHaveBeenCalledTimes(1);
   } finally { start.mockRestore(); subscribe.mockRestore(); }
 });
 
@@ -120,4 +121,36 @@ it("follow-up planning uses only the owner's completed clear output previews and
     expect((await request()).statusCode).toBe(409);
     expect(planner).toHaveBeenCalledTimes(1);
   } finally { await test.close(); }
+});
+
+
+it.each(["invalid-json", "extra-permissions", "invalid-role", "cycle"])("repairs %s once while retaining the repository boundary", async kind => {
+  const { PiRuntimeAdapter } = await import("@bastion/runtime-pi");
+  const { createTaskPlanner } = await import("./task-planning");
+  const valid = generatedPlan();
+  const invalid = kind === "invalid-json" ? "This is prose, not a plan" : JSON.stringify(kind === "extra-permissions" ? { ...valid, policyRules: [{ decision: "ALLOW" }] } : { ...valid, tasks: valid.tasks.map(t => ({ ...t, ...(kind === "invalid-role" ? { role: "ADMINISTRATOR" } : { dependsOn: [t.key] }) })) });
+  const outputs = [invalid, JSON.stringify(valid)];
+  const start = vi.spyOn(PiRuntimeAdapter.prototype, "startTask").mockResolvedValue({ sessionId: crypto.randomUUID() });
+  const subscribe = vi.spyOn(PiRuntimeAdapter.prototype, "subscribe").mockImplementation((_id, sink) => { const content = outputs.shift()!; queueMicrotask(() => { sink({ kind: "output", name: "plan", content }); sink({ kind: "finished", ok: true }); }); return () => {}; });
+  try {
+    const repository: import("./repository-access").RepositoryAccess = { directory: "/workspace/repo", connectedAt: new Date().toISOString(), sources: [{ name: "README.md", location: "/workspace/repo/README.md", trust: "UNTRUSTED", classification: "INTERNAL" }], permissions: [{ operation: "fs.read", decision: "ALLOW" }], policyRules: [{ id: crypto.randomUUID(), description: "Read only", operation: "fs.read", resourcePattern: "/workspace/repo/README.md", decision: "ALLOW" }] };
+    const planner = createTaskPlanner({ authMode: "api-key", apiKey: crypto.randomUUID(), provider: crypto.randomUUID(), model: crypto.randomUUID(), baseUrl: "https://test.invalid", agentDir: process.cwd(), timeoutMs: 1000 }, process.cwd());
+    const result = await planner(crypto.randomUUID(), undefined, repository);
+    expect(start).toHaveBeenCalledTimes(2);
+    expect(result.sources).toEqual(repository.sources);
+    expect(result.policyRules).toEqual(repository.policyRules);
+    expect(result.agents.every(a => a.capabilities.every(c => c === "fs.read:/workspace/repo/README.md"))).toBe(true);
+  } finally { start.mockRestore(); subscribe.mockRestore(); }
+});
+
+it("stops after one failed repair without returning a fallback workflow", async () => {
+  const { PiRuntimeAdapter } = await import("@bastion/runtime-pi");
+  const { createTaskPlanner } = await import("./task-planning");
+  const start = vi.spyOn(PiRuntimeAdapter.prototype, "startTask").mockResolvedValue({ sessionId: crypto.randomUUID() });
+  const subscribe = vi.spyOn(PiRuntimeAdapter.prototype, "subscribe").mockImplementation((_id, sink) => { queueMicrotask(() => { sink({ kind: "output", name: "plan", content: "{}" }); sink({ kind: "finished", ok: true }); }); return () => {}; });
+  try {
+    const planner = createTaskPlanner({ authMode: "api-key", apiKey: crypto.randomUUID(), provider: crypto.randomUUID(), model: crypto.randomUUID(), baseUrl: "https://test.invalid", agentDir: process.cwd(), timeoutMs: 1000 }, process.cwd());
+    await expect(planner(crypto.randomUUID())).rejects.toThrow("after one repair attempt");
+    expect(start).toHaveBeenCalledTimes(2);
+  } finally { start.mockRestore(); subscribe.mockRestore(); }
 });

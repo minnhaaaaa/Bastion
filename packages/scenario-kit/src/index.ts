@@ -10,6 +10,12 @@ import type { ArtifactBroker, EventJournal, Run, RunSnapshot, Scheduler, TaskSpe
 export { verifySelectedClaims, verifyToolAcceptanceChecks } from "./verification";
 export type { SelectedClaim, ToolAcceptanceCheck } from "./verification";
 
+// Quarantine is persisted before the scheduler is held and CONTAINED is emitted.
+// That intermediate state already belongs to recovery, not normal finalization.
+function recoveryOwnsRun(snapshot: RunSnapshot) {
+  return snapshot.run.status !== "RUNNING" || Object.values(snapshot.sources).some(source => source.securityState === "QUARANTINED");
+}
+
 export type VerificationCheck = { name: string; passed: boolean; detail?: string };
 export class WorkflowRunner {
   private readonly starting = new Set<string>();
@@ -35,7 +41,7 @@ export class WorkflowRunner {
     try { return await this.startRun(runId); }
     catch {
       const snapshot = await this.options.snapshot(runId);
-      if (snapshot.run.status === "RUNNING") await this.options.journal.append(runId, [{ runId, traceId: newId("trace"), type: "run.status_changed", payload: { from: "RUNNING", to: "FAILED", reason: "Workflow execution or verification failed" } }]);
+      if (!recoveryOwnsRun(snapshot)) await this.options.journal.append(runId, [{ runId, traceId: newId("trace"), type: "run.status_changed", payload: { from: "RUNNING", to: "FAILED", reason: "Workflow execution or verification failed" } }]);
       throw new Error("Workflow start failed");
     } finally { this.starting.delete(runId); }
   }
@@ -66,9 +72,11 @@ export class WorkflowRunner {
     await this.options.scheduler(run.mode).start(runId, tasks);
     const snapshot = await this.options.snapshot(runId);
     // A contained run stays contained; recovery owns its subsequent lifecycle.
-    if (snapshot.run.status === "CONTAINED" || snapshot.run.status === "RECOVERING") return [];
+    if (recoveryOwnsRun(snapshot)) return [];
     const allSucceeded = tasks.every(task => snapshot.executions[snapshot.latestExecutionByTask[task.id] ?? ""]?.state === "SUCCEEDED");
     const checks = allSucceeded ? await this.options.verify(snapshot) : [{ name: "workflow.execution", passed: false, detail: "Workflow tasks did not all succeed" }];
+    // Verification may await tools/audit while an operator contains the run.
+    if (recoveryOwnsRun(await this.options.snapshot(runId))) return [];
     await this.options.journal.append(runId, [
       { runId, traceId: newId("trace"), type: "verification.completed", payload: { incidentId: null, checks } },
       { runId, traceId: newId("trace"), type: "run.status_changed", payload: { from: snapshot.run.status, to: allSucceeded && checks.length > 0 && checks.every(c => c.passed) ? "COMPLETED" : "FAILED" } },

@@ -1,3 +1,5 @@
+import { SuspectedText } from "./SuspectedText";
+import type { RunSnapshot } from "@bastion/contracts";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ShieldAlert, ChevronDown, Check, X } from "lucide-react";
@@ -7,7 +9,7 @@ import { canResolveAction, reviewedDecision, type ReviewedAction } from "../../l
 import { ErrorBox } from "../ui";
 
 // Operator-only endpoint: raw arguments are fetched only when this card is opened.
-export function ToolApproval({ approval, token, reason }: { approval: ToolApprovalView; token: string; reason?: string | null }) {
+export function ToolApproval({ approval, token, reason, snapshot }: { snapshot?: RunSnapshot; approval: ToolApprovalView; token: string; reason?: string | null }) {
   const client = useQueryClient();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -27,13 +29,14 @@ export function ToolApproval({ approval, token, reason }: { approval: ToolApprov
   }
   return <article className="desk-approval">
     <div className="desk-row"><strong><ShieldAlert /> Action needs review</strong><span>{expired && approval.status === "PENDING" ? "EXPIRED" : approval.status}</span></div>
+    {snapshot && <SuspectedText snapshot={snapshot} sourceIds={snapshot.edges.filter(edge => edge.relation === "CONSUMED" && edge.toId === approval.executionId).map(edge => edge.fromId)} />}
     <h3>{approval.operation}</h3><code>{approval.resourcePreview}</code>
     <p>{reason || approval.reason || "This action requires operator approval."}</p>
     <button type="button" className="desk-subtle" aria-expanded={open} onClick={() => setOpen(!open)}>Review exact action <ChevronDown /></button>
     {open && <div className="desk-exact">
       {exact.isPending && <p>Loading action details…</p>}
       <ErrorBox error={exact.error || error} />
-      {exact.data && <><dl><dt>Target</dt><dd>{exact.data.resource}</dd>{exact.data.destination && <><dt>Destination</dt><dd>{exact.data.destination}</dd></>}<dt>Policy</dt><dd>{exact.data.ruleId}</dd><dt>Agent</dt><dd>{exact.data.agentId}</dd><dt>Expires</dt><dd>{new Date(exact.data.expiresAt).toLocaleString()}</dd></dl><pre>{JSON.stringify(exact.data.args, null, 2)}</pre><details><summary>Action fingerprint</summary><code>{exact.data.actionDigest}</code></details>
+      {exact.data && <><dl><dt>Target</dt><dd>{exact.data.resource}</dd>{exact.data.destination && <><dt>Destination</dt><dd>{exact.data.destination}</dd></>}<dt>Policy</dt><dd>{exact.data.ruleId}</dd><dt>Agent</dt><dd>{exact.data.agentId}</dd><dt>Expires</dt><dd>{new Date(exact.data.expiresAt).toLocaleString()}</dd></dl><details><summary>Full action arguments</summary><pre>{JSON.stringify(exact.data.args, null, 2)}</pre></details><details><summary>Action fingerprint</summary><code>{exact.data.actionDigest}</code></details>
         <div className="desk-row"><button className="desk-primary" disabled={!canResolve} onClick={() => void resolve("APPROVE")}><Check /> Allow once</button><button className="desk-secondary" disabled={!canResolve} onClick={() => void resolve("REJECT")}><X /> Deny</button></div>
       </>}
     </div>}

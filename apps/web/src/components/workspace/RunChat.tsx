@@ -1,3 +1,5 @@
+import { RunPullRequest } from "./RunPullRequest";
+import { SuspectedText } from "./SuspectedText";
 import { ResponseMarkdown } from "./ResponseMarkdown";
 import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -6,7 +8,7 @@ import { useGSAP } from "@gsap/react";
 import { Bot, ShieldAlert, Activity } from "lucide-react";
 import type { RunEvent, RunSnapshot } from "@bastion/contracts";
 import { api } from "../../lib/api";
-import { chatArtifacts, progressMessage } from "../../lib/chat-evidence";
+import { chatArtifacts, progressMessage, missingResponseMessage } from "../../lib/chat-evidence";
 import { ErrorBox } from "../ui";
 
 gsap.registerPlugin(useGSAP);
@@ -24,7 +26,8 @@ function Progress({ message }: { message: string }) {
   return <div ref={element} className="chat-progress" role="status"><Activity aria-hidden="true" />{message}</div>;
 }
 
-function TypedResponse({ content, animate }: { content: string; animate: boolean }) {
+function TypedResponse({ content, animate, onComplete }: { content: string; animate: boolean; onComplete?: () => void }) {
+  const completion = useRef(onComplete); completion.current = onComplete;
   const text = useRef<HTMLDivElement>(null);
   const tween = useRef<gsap.core.Tween | null>(null);
   const [typing, setTyping] = useState(false);
@@ -37,10 +40,10 @@ function TypedResponse({ content, animate }: { content: string; animate: boolean
       while (walker.nextNode()) nodes.push({ node: walker.currentNode as Text, characters: Array.from(walker.currentNode.textContent ?? "") });
       const total = nodes.reduce((sum, item) => sum + item.characters.length, 0);
       const reveal = (count: number) => { for (const item of nodes) { item.node.textContent = item.characters.slice(0, Math.max(0, count)).join(""); count -= item.characters.length; } };
-      if (!animate || context.conditions?.reduce) { reveal(total); setTyping(false); return; }
+      if (!animate || context.conditions?.reduce) { reveal(total); setTyping(false); completion.current?.(); return; }
       const cursor = { count: 0 };
       reveal(0); setTyping(true);
-      tween.current = gsap.to(cursor, { count: total, duration: Math.min(5, Math.max(.4, total / 180)), ease: "none", onUpdate: () => reveal(Math.floor(cursor.count)), onComplete: () => { reveal(total); setTyping(false); } });
+      tween.current = gsap.to(cursor, { count: total, duration: Math.min(5, Math.max(.4, total / 180)), ease: "none", onUpdate: () => reveal(Math.floor(cursor.count)), onComplete: () => { reveal(total); setTyping(false); completion.current?.(); } });
       return () => reveal(total);
     });
     return () => media.revert();
@@ -48,13 +51,14 @@ function TypedResponse({ content, animate }: { content: string; animate: boolean
   return <><div ref={text} aria-live="off" className={`chat-response-text ${typing ? "is-typing" : ""}`}><ResponseMarkdown content={content} /></div>{typing && <button type="button" className="desk-subtle" onClick={() => { tween.current?.progress(1).kill(); setTyping(false); }}>Show full response</button>}</>;
 }
 
-export function Response({ snapshot, artifact, token, animate }: { snapshot: RunSnapshot; artifact: ReturnType<typeof chatArtifacts>[number]; token: string; animate: boolean }) {
+export function Response({ snapshot, artifact, token, animate, onComplete }: { onComplete?: () => void; snapshot: RunSnapshot; artifact: ReturnType<typeof chatArtifacts>[number]; token: string; animate: boolean }) {
   const usable = artifact.trustState === "CLEAR" && snapshot.executions[artifact.producerExecutionId]?.securityState === "CLEAR";
   const output = useQuery({ queryKey: ["artifact-content", snapshot.run.id, artifact.id, artifact.trustState, token], queryFn: () => api<{ content: string }>(`/api/runs/${snapshot.run.id}/artifacts/${artifact.id}/content`, token), enabled: usable });
-  return <article className="chat-response"><header><Bot aria-hidden="true" /><strong>{artifact.name}</strong><small title="Recorded artifact trust state; not a prompt-injection scan verdict">Trust: {artifact.trustState}</small></header>{!usable ? <p className="chat-warning">This output has been invalidated. Review Security before using it.</p> : <><ErrorBox error={output.error} />{output.isPending ? <p role="status" className="desk-hint">Loading response…</p> : output.data && <TypedResponse content={output.data.content} animate={animate} />}</>}<footer>Version {artifact.version} · {artifact.classification} · Sensitive patterns redacted</footer></article>;
+  return <article className="chat-response"><header><Bot aria-hidden="true" /><strong>{artifact.name}</strong><small title="Recorded artifact trust state; not a prompt-injection scan verdict">Trust: {artifact.trustState}</small></header><SuspectedText snapshot={snapshot} sourceIds={artifact.sourceIds} />{!usable ? <p className="chat-warning">This output has been invalidated. Review Security before using it.</p> : <><ErrorBox error={output.error} />{output.isPending ? <p role="status" className="desk-hint">Loading response…</p> : output.data && <TypedResponse content={output.data.content} animate={animate} onComplete={onComplete} />}</>}<footer>Version {artifact.version} · {artifact.classification} · Sensitive patterns redacted</footer></article>;
 }
 
 export function RunChat({ snapshot, events, token, prompt, onInspect }: { snapshot: RunSnapshot; events: RunEvent[]; token: string; prompt?: string; onInspect(view: "security" | "activity"): void }) {
+  const [finishedResponses, setFinishedResponses] = useState<string[]>([]);
   const existing = useRef(new Set(Object.keys(snapshot.artifacts)));
   const last = [...events].reverse().find(event => progressMessage(event));
   const incidents = Object.values(snapshot.incidents).filter(incident => incident.state !== "RESOLVED");
@@ -64,7 +68,8 @@ export function RunChat({ snapshot, events, token, prompt, onInspect }: { snapsh
     {prompt && <div className="chat-user"><span>You</span><p>{prompt}</p></div>}
     {last && <Progress key={last.eventId} message={progressMessage(last)!} />}
     {(incidents.length > 0 || denied.length > 0 || snapshot.run.status === "FAILED") && <div className="chat-warning" role="status"><ShieldAlert aria-hidden="true" /><span>{incidents.length ? `${incidents.length} security incident${incidents.length === 1 ? "" : "s"} recorded.` : denied.length ? `${denied.length} action${denied.length === 1 ? "" : "s"} blocked.` : "This run stopped before completion."}</span><button className="desk-subtle" onClick={() => onInspect(incidents.length || denied.length ? "security" : "activity")}>Review details</button></div>}
-    {outputs.map(artifact => <Response key={artifact.id} snapshot={snapshot} artifact={artifact} token={token} animate={!existing.current.has(artifact.id)} />)}
-    {!outputs.length && <p className="chat-waiting">{["COMPLETED", "RECOVERED", "FAILED"].includes(snapshot.run.status) ? "No final response was recorded. Open Activity to inspect the run." : "The response will appear here when it is ready."}</p>}
+    {outputs.map(artifact => <Response key={artifact.id} snapshot={snapshot} artifact={artifact} token={token} animate={!existing.current.has(artifact.id)} onComplete={() => setFinishedResponses(ids => ids.includes(artifact.id) ? ids : [...ids, artifact.id])} />)}
+    {snapshot.run.status === "COMPLETED" && outputs.length > 0 && outputs.every(artifact => finishedResponses.includes(artifact.id)) && <RunPullRequest runId={snapshot.run.id} token={token} completed />}
+    {!outputs.length && <p className="chat-waiting">{missingResponseMessage(snapshot)}</p>}
   </div>;
 }

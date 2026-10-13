@@ -1,3 +1,5 @@
+import { GitHubPublishing } from "./github-publishing";
+import { GitHubAuth } from "./github-auth";
 import { ChatGPTAuth } from "./chatgpt-auth";
 import { CommandStore, PgEventJournal, PgWorkflowRepository, ProjectRepository, RunRepository, createDb } from "@bastion/db";
 import { FsBlobStore, PgArtifactBroker } from "@bastion/provenance";
@@ -41,9 +43,16 @@ const recovery = new RecoveryManager({
 });
 recovery.start();
 
+const githubAuth = GitHubAuth.fromEnv(pg.db, process.env);
+const githubPublishing = githubAuth && process.env.SANDBOX_WORKSPACE_PATH && process.env.SANDBOX_ROOT ? new GitHubPublishing(pg.db, journal, githubAuth, process.env.SANDBOX_WORKSPACE_PATH, process.env.SANDBOX_ROOT) : undefined;
+const stopPublishing = journal.onCommitted(event => {
+  if (event.type === "run.status_changed" && event.payload.to === "COMPLETED") void githubPublishing?.publish(event.runId).catch(() => console.error("Pull request publication failed"));
+});
 const { app } = await buildServer(
   {
     db: pg.db,
+    githubAuth,
+    githubPublishing,
     journal,
     broker,
     recovery,
@@ -79,7 +88,11 @@ const { app } = await buildServer(
 const reconciled = await reconcileOnBoot({ db: pg.db, journal, scheduler: runtime?.scheduler });
 if (reconciled.failedRuns.length || reconciled.adopted.length || reconciled.expiredToolApprovals.length) console.warn("boot reconciliation", reconciled);
 
+void githubPublishing?.resume();
+
 const shutdown = async () => {
+  stopPublishing();
+  await githubPublishing?.idle();
   await app.close();
   runtime?.toolApprovals.stop();
   recovery.stop();

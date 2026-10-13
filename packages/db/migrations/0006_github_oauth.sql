@@ -1,0 +1,1 @@
+CREATE TABLE "github_connections" ("owner_id" text PRIMARY KEY NOT NULL, "account_id" text NOT NULL, "login" text NOT NULL, "scopes" text NOT NULL, "credential" text NOT NULL, "connected_at" timestamp with time zone NOT NULL);

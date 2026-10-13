@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { newId, Severity, type EventJournal, type RunSnapshot } from "@bastion/contracts";
-import { redactPreview } from "@bastion/provenance";
+import { redactPreview, redactText } from "@bastion/provenance";
 import type { FindingReporter } from "@bastion/runtime-pi";
 
 const Finding = z.object({ sourceVersionId: z.string().min(1), evidence: z.string().min(8).max(500), reason: z.string().trim().min(1).max(500), severity: Severity }).strict();
@@ -28,7 +28,7 @@ export function injectionFindingRecorder(journal: EventJournal & { snapshot(runI
       const digest = createHash("sha256").update(finding.evidence).digest("hex");
       await journal.append(identity.runId, [{ runId: identity.runId, traceId: identity.traceId, taskId: identity.taskId, agentId: identity.agentId, type: "incident.opened", payload: {
         incidentId, sourceVersionId: source.id, severity: finding.severity, triggerToolRequestId: null,
-        reason: `Model-reported prompt injection: ${redactPreview(finding.reason)} (evidence SHA-256: ${digest}; execution: ${execution.id}). Requires review; no tool denial implied.`,
+        reason: `Model-reported prompt injection: ${redactPreview(finding.reason)} (evidence SHA-256: ${digest}; execution: ${execution.id}). Requires review; no tool denial implied.\nSuspected text (redacted): ${JSON.stringify(redactText(finding.evidence))}`,
       } }]);
       return { incidentId, sourceVersionId: source.id, state: "OPEN" };
     });

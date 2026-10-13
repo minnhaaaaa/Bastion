@@ -8,7 +8,7 @@ import type { GatewayTool } from "@bastion/runtime-pi";
 const OPERATIONS: Record<string, { description: string; parameters: TSchema }> = {
   "fs.read": { description: "Read a UTF-8 file inside the workspace.", parameters: Type.Object({ path: Type.String() }) },
   "fs.write": {
-    description: "Write a UTF-8 file inside the workspace.",
+    description: "Request a UTF-8 file write inside the workspace with its exact proposed content. If policy requires review, calling this tool opens the human approval request and waits; nothing is written before approval. Do not ask for approval in prose instead of calling this tool.",
     parameters: Type.Object({ path: Type.String(), content: Type.String() }),
   },
   "net.http": { description: "HTTP GET a URL. Only approved origins are reachable.", parameters: Type.Object({ url: Type.String() }) },

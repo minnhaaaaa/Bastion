@@ -43,6 +43,27 @@
       "when": 1791607287585,
       "tag": "0005_workspace_deletion",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791618744839,
+      "tag": "0006_github_oauth",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791620082136,
+      "tag": "0007_run_pull_requests",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791621372364,
+      "tag": "0008_explicit_pr_request",
+      "breakpoints": true
     }
   ]
 }

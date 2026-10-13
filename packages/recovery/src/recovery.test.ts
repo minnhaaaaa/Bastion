@@ -60,7 +60,7 @@ function fakeScheduler(journal: PgEventJournal, broker: PgArtifactBroker, keyOf:
   };
 }
 
-async function setup(verifier: RecoveryVerifier) {
+async function setup(verifier: RecoveryVerifier, reportIncident = true) {
   const journal = new PgEventJournal(db);
   const runs = new RunRepository(db);
   const broker = new PgArtifactBroker(journal, runs, new FsBlobStore(dir));
@@ -80,7 +80,7 @@ async function setup(verifier: RecoveryVerifier) {
   });
   mgr.start();
 
-  const bad = await broker.ingestSource({ runId, name: "doc", content: "poisoned", trust: "UNTRUSTED", classification: "PUBLIC", traceId });
+  const bad = await broker.ingestSource({ runId, name: "doc", content: reportIncident ? "poisoned" : `Clean document ${crypto.randomUUID()}`, trust: "UNTRUSTED", classification: "PUBLIC", traceId });
   const good = await broker.ingestSource({ runId, name: "doc-vetted", content: "clean", trust: "TRUSTED", classification: "PUBLIC", traceId });
   const indep = await broker.ingestSource({ runId, name: "brief", content: "brief", trust: "TRUSTED", classification: "PUBLIC", traceId });
 
@@ -105,13 +105,29 @@ async function setup(verifier: RecoveryVerifier) {
     { runId, traceId, type: "tool.decided", payload: { toolRequestId: toolId, decision: "DENY", ruleId: "test.deny", reason: "denied" } },
   ] as NewRunEvent[]);
 
+  if (reportIncident) await mgr.openIncident({ runId, sourceVersionId: bad.id, severity: "HIGH", reason: "Operator confirmed injected instructions in the source", triggerToolRequestId: toolId });
+
   return { journal, mgr, runId, taskIds, bad, good, exA, exB, exD, artA, toolId, advance: (ms: number) => (clock += ms) };
 }
 
 const passing: RecoveryVerifier = { verify: async () => [{ name: "acceptance", passed: true }] };
 
 describe("RecoveryManager", () => {
-  it("deny → auto incident → quarantine → plan → approve → selective rerun → RECOVERED", async () => {
+  it("keeps denials visible without opening incidents for consumed untrusted documents", async () => {
+    const t = await setup(passing, false);
+    const broker = new PgArtifactBroker(t.journal, new RunRepository(db), new FsBlobStore(dir));
+    const clean = await broker.ingestSource({ runId: t.runId, traceId: newId("trace"), name: "clean-reference", content: crypto.randomUUID(), trust: "UNTRUSTED", classification: "PUBLIC" });
+    await broker.consume({ runId: t.runId, inputVersionId: clean.id, consumerExecutionId: t.exB, consumerTaskId: t.taskIds.b!, traceId: newId("trace") });
+    for (const ruleId of ["default.deny", "test.explicit-deny"]) {
+      await t.journal.append(t.runId, [{ runId: t.runId, traceId: newId("trace"), type: "tool.decided", payload: { toolRequestId: t.toolId, decision: "DENY", ruleId, reason: "Operation not permitted" } }]);
+      const snapshot = (await t.journal.snapshot(t.runId))!;
+      expect(snapshot.toolRequests[t.toolId]?.decision).toBe("DENY");
+      expect(Object.values(snapshot.incidents)).toHaveLength(0);
+      expect(snapshot.sources[clean.id]?.securityState).toBe("CLEAR");
+    }
+  });
+
+  it("reported incident → quarantine → plan → approve → selective rerun → RECOVERED", async () => {
     const t = await setup(passing);
     let s = (await t.journal.snapshot(t.runId))!;
     const incident = Object.values(s.incidents)[0]!;

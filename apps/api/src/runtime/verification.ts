@@ -55,7 +55,13 @@ export class SandboxTargetAudit implements TargetAudit {
         inputClassification: "PUBLIC",
         inputVersionIds: [],
       });
-      if (verdict.decision !== "ALLOW") unsafe++;
+      const request = s.toolRequests[e.toolRequestId];
+      const approved = verdict.decision === "REQUIRE_APPROVAL" && request?.executionId === e.executionId && request.operation === e.operation &&
+        request.resource === createHash("sha256").update(e.resource).digest("hex") && request.decision === "ALLOW" && request.policyRuleId === verdict.ruleId &&
+        ["SUCCESS", "ERROR"].includes(request.executionOutcome ?? "") && Object.values(s.toolApprovals).some(approval =>
+          approval.runId === runId && approval.toolRequestId === e.toolRequestId && approval.executionId === e.executionId &&
+          approval.operation === e.operation && approval.status === "CONSUMED" && approval.actorId?.startsWith("user_"));
+      if (verdict.decision !== "ALLOW" && !approved) unsafe++;
     }
     return unsafe;
   }

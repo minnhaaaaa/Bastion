@@ -1,3 +1,5 @@
+import { IncidentExcerpt } from "./SuspectedText";
+import { incidentEvidence } from "../../lib/incident-evidence";
 import { DetailDisclosure } from "./DetailDisclosure";
 import { useState } from "react";
 import { newId, type RunSnapshot } from "@bastion/contracts";
@@ -64,7 +66,7 @@ export function Incidents({
             </span>
             <span className="mono">{inc.id}</span>
           </div>
-          <h3>{inc.reason}</h3>
+          <strong>Suspected malicious text</strong><IncidentExcerpt reason={inc.reason} /><details><summary>Finding details</summary><p>{incidentEvidence(inc.reason).explanation}</p></details>
           <p>
             Source:{" "}
             {s.sources[inc.sourceVersionId]?.name ?? inc.sourceVersionId}

@@ -13,7 +13,7 @@ import {
   type Severity,
   type Workflow,
 } from "@bastion/contracts";
-import { computeImpact, topoOrder, upstreamUntrustedSources } from "./impact";
+import { computeImpact, topoOrder } from "./impact";
 
 export type RecoveryErrorCode = "NOT_FOUND" | "CONFLICT" | "FORBIDDEN" | "EXPIRED" | "UNAVAILABLE" | "VALIDATION";
 export class RecoveryError extends Error {
@@ -79,9 +79,8 @@ export class RecoveryManager implements RecoveryService {
     this.log = d.log ?? (() => undefined);
   }
 
-  /** Subscribe to the journal (auto-incidents) and scheduler (recovery completion). */
+  /** Subscribe to scheduler recovery completion. Denials alone do not implicate sources. */
   start(): void {
-    this.unsubscribers.push(this.d.journal.onCommitted((e) => this.onEvent(e)));
     if (this.d.scheduler) this.unsubscribers.push(this.d.scheduler.onTaskSettled((e) => this.track(this.onTaskSettled(e))));
   }
 
@@ -139,23 +138,6 @@ export class RecoveryManager implements RecoveryService {
       },
     ]);
     return (await this.snap(input.runId)).incidents[incidentId]!;
-  }
-
-  private async onEvent(e: RunEvent): Promise<void> {
-    if (e.type !== "tool.decided" || e.payload.decision !== "DENY") return;
-    const s = await this.snap(e.runId);
-    const req = s.toolRequests[e.payload.toolRequestId];
-    if (!req) return;
-    for (const srcId of upstreamUntrustedSources(s, req.executionId)) {
-      const src = s.sources[srcId]!;
-      await this.openIncident({
-        runId: e.runId,
-        sourceVersionId: srcId,
-        severity: "HIGH",
-        reason: `${req.toolName} on ${req.destination ?? req.resource} denied by ${e.payload.ruleId}; the requesting execution consumed untrusted ${src.name} v${src.version}`,
-        triggerToolRequestId: req.id,
-      });
-    }
   }
 
   // ── Containment ──────────────────────────────────────────────────────────

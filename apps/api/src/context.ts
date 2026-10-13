@@ -25,6 +25,8 @@ import { HttpError, forbidden, notFound } from "./errors";
 
 /** Everything the HTTP/socket layer needs. Built by the composition root (index.ts) or tests. */
 export interface AppDeps {
+  githubPublishing?: import("./github-publishing").GitHubPublishing;
+  githubAuth?: import("./github-auth").GitHubAuth;
   providerConnections?: import("./provider-connections").ProviderConnections;
   chatgptAuth?: import("./chatgpt-auth").ChatGPTAuth;
   repositoryConnector?: import("./repository-access").RepositoryConnector;
@@ -120,8 +122,9 @@ export class RunService {
     return this.d.launcher;
   }
 
-  async start(workflow: Workflow, mode: "PROTECTED" | "BASELINE", attackPayloadIds: string[]): Promise<string> {
+  async start(workflow: Workflow, mode: "PROTECTED" | "BASELINE", attackPayloadIds: string[], createPullRequest = false): Promise<string> {
     const launcher = this.assertRuntime();
+    if (createPullRequest && (!this.d.githubPublishing || mode !== "PROTECTED")) throw new HttpError("UNAVAILABLE", "Pull request publishing requires a configured GitHub connection and a protected run");
     if (!this.d.providerConnections) {
       const [assigned] = await this.d.db.select().from(schema.workflowModels).where(and(eq(schema.workflowModels.workflowId, workflow.id), eq(schema.workflowModels.version, workflow.version)));
       if (assigned && Object.keys(assigned.bindings).length) throw new HttpError("UNAVAILABLE", "Restore provider connection storage before running this workflow");
@@ -141,6 +144,7 @@ export class RunService {
         payload: { projectId: workflow.projectId, workflowId: workflow.id, workflowVersion: workflow.version, mode },
       },
     ]);
+    if (createPullRequest && mode === "PROTECTED") await this.d.githubPublishing?.pin(runId, workflow);
     // Launch runs in the background; failures are recorded as events, never swallowed.
     void launcher.launch({ runId, workflow, attackPayloadIds, traceId }).catch(async (err) => {
       this.log.error({ err, runId }, "run launch failed");

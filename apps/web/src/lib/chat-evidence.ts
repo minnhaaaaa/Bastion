@@ -23,3 +23,16 @@ export function progressMessage(event: RunEvent): string | null {
     default: return null;
   }
 }
+
+/** Explain recorded state without inventing an agent answer or exposing invalidated output. */
+export function missingResponseMessage(snapshot: RunSnapshot): string {
+  if (snapshot.run.status === "RECOVERING") return "Recovery is running. A new response will appear after the affected work completes.";
+  if (snapshot.run.status === "RECOVERY_FAILED") return "Recovery did not pass verification. Open Security to review the result before using any output.";
+  if (snapshot.run.status === "CONTAINED" || (Object.values(snapshot.sources).some(source => source.securityState === "QUARANTINED") && !["COMPLETED", "RECOVERED"].includes(snapshot.run.status))) {
+    return "Work stopped because a source was quarantined. Affected outputs cannot be used, and no final response is available. Open Security to review containment and recovery options.";
+  }
+  if (Object.values(snapshot.toolApprovals).some(approval => approval.status === "PENDING")) return "An action is waiting for your approval. Review the exact action to allow it once or deny it.";
+  return ["COMPLETED", "RECOVERED", "FAILED"].includes(snapshot.run.status)
+    ? "No final response was recorded. Open Activity to inspect the run."
+    : "The response will appear here when it is ready.";
+}

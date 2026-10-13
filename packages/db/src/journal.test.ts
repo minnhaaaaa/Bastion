@@ -121,3 +121,19 @@ describe("PgWorkflowRepository", () => {
     expect(await repo.list(project.id)).toHaveLength(1);
   });
 });
+
+
+it("atomically rejects stale finalization after containment without recording its verification", async () => {
+  const j = new PgEventJournal(db);
+  const { runId, traceId } = await seedRun(j);
+  await j.append(runId, [{ runId, traceId, type: "run.status_changed", payload: { from: "CREATED", to: "RUNNING" } }]);
+  await j.append(runId, [{ runId, traceId, type: "run.status_changed", payload: { from: "RUNNING", to: "CONTAINED" } }]);
+  for (const to of ["FAILED", "COMPLETED"] as const) {
+    await expect(j.append(runId, [
+      { runId, traceId, type: "verification.completed", payload: { incidentId: null, checks: [{ name: "stale", passed: true }] } },
+      { runId, traceId, type: "run.status_changed", payload: { from: "RUNNING", to } },
+    ])).rejects.toThrow("superseded");
+  }
+  expect((await j.snapshot(runId))!.run.status).toBe("CONTAINED");
+  expect((await j.read(runId)).some(e => e.type === "verification.completed")).toBe(false);
+});

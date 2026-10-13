@@ -1,3 +1,5 @@
+import { GitHubAuth, GitHubOAuthConfig } from "./github-auth";
+import type { z } from "zod";
 import { ProviderConnections } from "./provider-connections";
 /** Test-only harness: real server + PGlite + real services; runtime doubles are passed in by tests. */
 import { mkdtemp, rm } from "node:fs/promises";
@@ -12,7 +14,7 @@ import { newSecret } from "./auth";
 import { buildServer } from "./server";
 
 export async function createTestApp(
-  opts: { taskAttachments?: import("./task-attachments").TaskAttachmentStore; providerConfig?: { controller: import("@bastion/runtime-pi").PiConfig; key: string }; repositoryConnector?: import("./repository-access").RepositoryConnector; taskPlanner?: import("./task-planning").TaskPlanner; launcher?: RunLauncher; audit?: TargetAudit; briefingMs?: number; attackWindowMs?: number; reconnectGraceMs?: number; roomTtlMs?: number; joinRatePerMinute?: number; additionalOrigins?: string[] } = {},
+  opts: { githubConfig?: { config: z.infer<typeof GitHubOAuthConfig>; secret: string; key: string; request?: typeof fetch }; taskAttachments?: import("./task-attachments").TaskAttachmentStore; providerConfig?: { controller: import("@bastion/runtime-pi").PiConfig; key: string }; repositoryConnector?: import("./repository-access").RepositoryConnector; taskPlanner?: import("./task-planning").TaskPlanner; launcher?: RunLauncher; audit?: TargetAudit; briefingMs?: number; attackWindowMs?: number; reconnectGraceMs?: number; roomTtlMs?: number; joinRatePerMinute?: number; additionalOrigins?: string[] } = {},
 ) {
   const { db, close } = await createTestDb();
   const dir = await mkdtemp(join(tmpdir(), "bastion-api-"));
@@ -30,6 +32,7 @@ export async function createTestApp(
   const { app, io, arena } = await buildServer(
     {
       db,
+      githubAuth: opts.githubConfig ? new GitHubAuth(db, opts.githubConfig.config, opts.githubConfig.secret, opts.githubConfig.key, opts.githubConfig.request) : undefined,
       providerConnections,
       journal,
       broker,

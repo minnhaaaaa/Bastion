@@ -2,7 +2,7 @@ import { redactText } from "@bastion/provenance";
 import { TaskDocument, attachTaskSources } from "../task-attachments";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { schema } from "@bastion/db";
-import { RepositorySelection, RepositoryAccess } from "../repository-access";
+import { RepositorySelection, RepositoryAccess, RepositoryConnectionError } from "../repository-access";
 import { z } from "zod";
 import type { FastifyInstance } from "fastify";
 import {
@@ -65,7 +65,15 @@ export function coreRoutes(
           const target = kind === "projects" ? eq(schema.runs.projectId, id) : eq(schema.runs.id, id);
           const rows = await tx.select().from(schema.runs).where(and(target, isNull(schema.runs.deletedAt))).for("update");
           if (kind === "runs" && !rows.length) throw notFound("run");
-          if (rows.some(run => !["COMPLETED", "RECOVERED", "FAILED", "RECOVERY_FAILED"].includes(run.status))) throw new HttpError("CONFLICT", "Wait for active runs to finish before deleting.");
+          if (rows.some(run => !["COMPLETED", "RECOVERED", "FAILED", "RECOVERY_FAILED", "CONTAINED"].includes(run.status))) throw new HttpError("CONFLICT", "Wait for active runs to finish before deleting.");
+          const containedIds = rows.filter(run => run.status === "CONTAINED").map(run => run.id);
+          if (containedIds.length) {
+            const [executing] = await tx.select({ id: schema.taskExecutions.id }).from(schema.taskExecutions)
+              .where(and(inArray(schema.taskExecutions.runId, containedIds), inArray(schema.taskExecutions.state, ["RUNNING", "READY"]))).limit(1);
+            const [pendingApproval] = await tx.select({ id: schema.toolApprovals.id }).from(schema.toolApprovals)
+              .where(and(inArray(schema.toolApprovals.runId, containedIds), eq(schema.toolApprovals.status, "PENDING"))).limit(1);
+            if (executing || pendingApproval) throw new HttpError("CONFLICT", "Containment is still stopping work or awaiting a tool decision. Wait for tasks to stop and resolve pending tool approvals before deleting.");
+          }
           const [room] = await tx.select({ id: schema.arenaRooms.id }).from(schema.arenaRooms)
             .innerJoin(schema.workflows, eq(schema.workflows.id, schema.arenaRooms.workflowId))
             .where(and(kind === "projects" ? eq(schema.workflows.projectId, id) : eq(schema.arenaRooms.runId, id), inArray(schema.arenaRooms.status, ["OPEN", "IN_PROGRESS"]))).limit(1);
@@ -102,7 +110,7 @@ export function coreRoutes(
       if (cmd.selection) {
         if (!d.repositoryConnector) throw new HttpError("UNAVAILABLE", "Repository connections are not enabled on the controller");
         try { repository = await d.repositoryConnector(cmd.selection); }
-        catch { throw new HttpError("VALIDATION", "Repository could not be connected. Select a repository root inside the sandbox with tracked regular files within the configured source budget."); }
+        catch (error) { throw new HttpError("VALIDATION", error instanceof RepositoryConnectionError ? error.message : "Repository could not be connected because of a controller configuration or filesystem error. Ask the operator to check the repository connector."); }
       }
       await d.db.insert(schema.projectConnections).values({ projectId: id, repository }).onConflictDoUpdate({ target: schema.projectConnections.projectId, set: { repository, updatedAt: new Date().toISOString() } });
       return { status: 200, body: { repository } };
@@ -136,13 +144,25 @@ export function coreRoutes(
       followUp = { runId: previous.run.id, outputs: artifacts.map(artifact => ({ artifactVersionId: artifact.id, name: artifact.name, preview: artifact.preview })) };
     }
     const [connection] = await d.db.select().from(schema.projectConnections).where(eq(schema.projectConnections.projectId, id));
-    const repository = !base && connection?.repository ? RepositoryAccess.parse(connection.repository) : undefined;
+    let repository = !base && connection?.repository ? RepositoryAccess.parse(connection.repository) : undefined;
     const connectionId = cmd.connectionId ?? await d.providerConnections?.projectDefault(id);
     if (d.providerConnections && !connectionId) throw new HttpError("VALIDATION", "Choose a project model in Connections first");
     const selectedConfig = connectionId ? await d.providerConnections?.config(actor.userId, connectionId) : undefined;
     const planner = d.taskPlanner;
     if (!planner) throw new HttpError("UNAVAILABLE", "Task planning is not connected on the controller");
     return x.idem.run(reply, { commandId: cmd.commandId, actorId: actor.userId, route: `projects.task-plan:${id}` }, async () => {
+      if (repository?.remoteUrl) {
+        if (!d.repositoryConnector) throw new HttpError("UNAVAILABLE", "Automatic repository sync is unavailable. Task preparation stopped without using stale files.");
+        let refreshed: RepositoryAccess;
+        try { refreshed = await d.repositoryConnector({ directory: repository.remoteUrl, permissions: repository.permissions }); }
+        catch (error) { throw new HttpError("UNAVAILABLE", error instanceof RepositoryConnectionError ? `Repository sync failed. Task preparation stopped: ${error.message}` : "Repository sync failed. Task preparation stopped without using stale files."); }
+        // A concurrent disconnect or permission change must not be overwritten by a slow clone.
+        const updated = await d.db.update(schema.projectConnections).set({ repository: refreshed, updatedAt: new Date().toISOString() })
+          .where(and(eq(schema.projectConnections.projectId, id), eq(schema.projectConnections.repository, connection!.repository)))
+          .returning({ projectId: schema.projectConnections.projectId });
+        if (!updated.length) throw new HttpError("CONFLICT", "The repository connection changed during sync. Start the task again using the current connection.");
+        repository = refreshed;
+      }
       const definition = await planner(cmd.instruction, base, repository, followUp, selectedConfig, cmd.documents?.map(document => `Attachment: ${document.name}`));
       if (!cmd.documents?.length) return { status: 200, body: { definition } };
       const stored = await d.taskAttachments!.persist(cmd.documents);
@@ -187,15 +207,28 @@ export function coreRoutes(
     return x.access.ownWorkflow(actor, id, version);
   });
 
+  app.get("/api/runs/:id/pull-request", async req => {
+    const actor = await op(req), { id } = IdParam.parse(req.params);
+    await x.access.operatorRun(actor, id);
+    return { publication: await d.githubPublishing?.status(id) ?? null };
+  });
+  app.post("/api/runs/:id/pull-request", async req => {
+    const actor = await op(req), { id } = IdParam.parse(req.params);
+    await x.access.operatorRun(actor, id);
+    if (!d.githubPublishing) throw new HttpError("UNAVAILABLE", "GitHub publishing is not configured");
+    await d.githubPublishing.publish(id);
+    return { publication: await d.githubPublishing.status(id) };
+  });
+
   // ── Runs ─────────────────────────────────────────────────────────────────
   app.post("/api/runs", async (req, reply) => {
     const actor = await op(req);
-    const cmd = CreateRunCmd.parse(req.body);
+    const cmd = CreateRunCmd.extend({ createPullRequest: z.boolean().optional() }).parse(req.body);
     const wf = await x.access.ownWorkflow(actor, cmd.workflowId);
     x.runs.assertRuntime();
     return x.idem.run(reply, { commandId: cmd.commandId, actorId: actor.userId, route: "runs.create" }, async () => ({
       status: 201,
-      body: { runId: await x.runs.start(wf, cmd.mode, []) },
+      body: { runId: await x.runs.start(wf, cmd.mode, [], cmd.createPullRequest === true) },
     }));
   });
 
