@@ -1,0 +1,101 @@
+# Run from the repository root with --env-file .env.production.
+# The controller is the only bridge to the worker's internal network.
+services:
+  postgres:
+    image: ${DEPLOY_POSTGRES_IMAGE:?required}
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+      POSTGRES_DB: ${POSTGRES_DB:?required}
+    volumes: [postgres:/var/lib/postgresql/data]
+    networks: [database]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+  neo4j:
+    image: ${DEPLOY_NEO4J_IMAGE:?required}
+    restart: unless-stopped
+    environment:
+      NEO4J_AUTH: ${NEO4J_USER:?required}/${NEO4J_PASSWORD:?required}
+      NEO4J_server_memory_heap_initial__size: ${DEPLOY_NEO4J_HEAP_INITIAL:?required}
+      NEO4J_server_memory_heap_max__size: ${DEPLOY_NEO4J_HEAP_MAX:?required}
+      NEO4J_server_memory_pagecache_size: ${DEPLOY_NEO4J_PAGECACHE:?required}
+    volumes: [neo4j:/data]
+    networks: [database]
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/api.Dockerfile
+      args:
+        DEPLOY_NODE_IMAGE: ${DEPLOY_NODE_IMAGE:?required}
+    restart: unless-stopped
+    init: true
+    env_file: ../.env.production
+    volumes:
+      - ${DEPLOY_DATA_DIRECTORY:?required}:${DEPLOY_DATA_DIRECTORY:?required}
+    networks: [edge, database, worker]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      neo4j:
+        condition: service_started
+      worker:
+        condition: service_started
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+  worker:
+    build:
+      context: ..
+      dockerfile: sandbox/Dockerfile
+      args:
+        SANDBOX_NODE_IMAGE: ${SANDBOX_NODE_IMAGE:?required}
+    restart: unless-stopped
+    environment:
+      SANDBOX_ROOT: ${SANDBOX_ROOT:?required}
+      SANDBOX_AUDIT_PATH: ${SANDBOX_AUDIT_PATH:?required}
+      SANDBOX_TOKEN: ${SANDBOX_TOKEN:?required}
+      SANDBOX_HTTP_ORIGINS: ${SANDBOX_HTTP_ORIGINS:?required}
+      SANDBOX_EXEC_COMMANDS: ${SANDBOX_EXEC_COMMANDS:?required}
+      SANDBOX_TIMEOUT_MS: ${SANDBOX_TIMEOUT_MS:?required}
+      SANDBOX_MAX_BYTES: ${SANDBOX_MAX_BYTES:?required}
+      SANDBOX_PORT: ${SANDBOX_PORT:?required}
+      SANDBOX_BIND_HOST: ${SANDBOX_BIND_HOST:?required}
+    volumes:
+      - ${SANDBOX_WORKSPACE_PATH:?required}:${SANDBOX_ROOT:?required}
+      - ${SANDBOX_AUDIT_DIRECTORY:?required}:${SANDBOX_AUDIT_MOUNT:?required}
+    networks: [worker]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: ${SANDBOX_PIDS_LIMIT:?required}
+    mem_limit: ${SANDBOX_MEMORY_LIMIT:?required}
+    cpus: ${SANDBOX_CPUS:?required}
+  proxy:
+    image: ${DEPLOY_CADDY_IMAGE:?required}
+    restart: unless-stopped
+    environment:
+      BACKEND_HOST: ${BACKEND_HOST:?required}
+      API_PORT: ${API_PORT:?required}
+    ports:
+      - "${DEPLOY_HTTP_PORT:?required}:80"
+      - "${DEPLOY_HTTPS_PORT:?required}:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [edge]
+    depends_on: [api]
+networks:
+  edge:
+  database:
+    internal: true
+  worker:
+    internal: true
+volumes:
+  postgres:
+  neo4j:
+  caddy_data:
+  caddy_config:
